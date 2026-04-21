@@ -77,19 +77,49 @@ def resolve_executable(path_or_name: str) -> str:
     return shutil.which(candidate) or ""
 
 
+def current_desktop() -> str:
+    """Return the active desktop environment identifier, lowercased."""
+    de = os.environ.get("XDG_CURRENT_DESKTOP", os.environ.get("DESKTOP_SESSION", ""))
+    return de.lower()
+
+
 def detect_refresh_commands() -> list[list[str]]:
     commands: list[list[str]] = []
+    de = current_desktop()
+
+    # KDE Plasma: rebuild the system configuration cache
     for binary in ("kbuildsycoca6", "kbuildsycoca5", "kbuildsycoca"):
         if shutil.which(binary):
             commands.append([binary])
             break
+
+    # Standard freedesktop MIME/desktop database (GNOME, XFCE, Cinnamon, MATE, LXQt, Budgie…)
     if shutil.which("update-desktop-database"):
         commands.append(["update-desktop-database", str(USER_APPLICATIONS_DIR)])
+
+    # Force desktop menu rebuild — picks up new entries immediately in XFCE, MATE, Cinnamon, LXQt
+    if shutil.which("xdg-desktop-menu"):
+        commands.append(["xdg-desktop-menu", "forceupdate"])
+
+    # GNOME Shell: notify the shell via dbus so the launcher updates without a logout
+    if "gnome" in de or "budgie" in de or "unity" in de:
+        if shutil.which("gdbus"):
+            commands.append([
+                "gdbus", "call", "--session",
+                "--dest", "org.gnome.Shell",
+                "--object-path", "/org/gnome/Shell",
+                "--method", "org.gnome.Shell.Eval",
+                "''",
+            ])
+
     return commands
 
 
 def run_refresh_commands() -> list[str]:
     messages: list[str] = []
+    de = current_desktop()
+    if de:
+        messages.append(f"Desktop: {de}")
     for command in detect_refresh_commands():
         try:
             completed = subprocess.run(command, check=True, capture_output=True, text=True)
@@ -98,8 +128,11 @@ def run_refresh_commands() -> list[str]:
             messages.append(f"{label}: ok" if not output else f"{label}: {output}")
         except (OSError, subprocess.CalledProcessError) as exc:
             messages.append(f"{' '.join(command)}: {exc}")
-    if not messages:
-        messages.append("Could not find kbuildsycoca or update-desktop-database.")
+    if len(messages) == (1 if de else 0):
+        messages.append(
+            "No desktop refresh tools found (kbuildsycoca, update-desktop-database, xdg-desktop-menu).\n"
+            "You may need to log out and back in for the app to appear in the launcher."
+        )
     return messages
 
 
