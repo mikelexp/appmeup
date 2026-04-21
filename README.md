@@ -1,14 +1,13 @@
 # AppMeUp
 
-A Python + PySide6 desktop app for creating and editing Chromium web apps from user-level `.desktop` files.
+Desktop app for creating and editing Chromium-based web apps from `.desktop` launchers.
 
 ## Features
 
-- Creates `.desktop` files in `~/.local/share/applications`
-- Uses Chromium already installed on the system
-- Can edit existing web apps if they are Chromium web apps
-- Tries to download the icon automatically from the website
-- Runs `kbuildsycoca6` or an equivalent command to refresh your Desktop Environment
+- Create user-level web app launchers in `~/.local/share/applications`
+- Edit existing Chromium web apps
+- Fetch site icons automatically when possible
+- Refresh the desktop app menu after changes
 
 ## Run
 
@@ -19,45 +18,23 @@ pip install -r requirements.txt
 python3 appmeup.py
 ```
 
-You can also open a `.desktop` file directly:
+Open an existing launcher:
 
 ```bash
-python3 appmeup.py ~/.local/share/applications/my-app.desktop
+python3 appmeup.py ~/.local/share/applications/example.desktop
 ```
 
-## Build with Nuitka
-
-The generated binary includes the Python dependencies. Two build modes are provided:
-
-- `standalone`: produces a self-contained directory in `dist/`
-- `onefile`: produces a single executable that self-extracts at runtime
-
-Install build dependencies:
+## Build
 
 ```bash
 ./scripts/install-build-deps.sh
-```
-
-Build standalone:
-
-```bash
 ./scripts/build-standalone.sh
-```
-
-Build onefile:
-
-```bash
+# or
 ./scripts/build-onefile.sh
 ```
 
-Clean build outputs:
+Install a built binary locally:
 
 ```bash
-./scripts/clean-build.sh
+./scripts/install.sh
 ```
-
-Expected outputs:
-
-- `dist/appmeup.dist/` for standalone
-- `dist/appmeup.dist/appmeup.bin` as the standalone executable
-- `dist/` will contain the Nuitka-generated onefile executable when using onefile mode

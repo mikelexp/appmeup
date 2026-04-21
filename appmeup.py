@@ -7,6 +7,7 @@ import os
 import re
 import shlex
 import shutil
+import ssl
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -42,15 +43,25 @@ from PySide6.QtWidgets import (
 )
 
 
-APP_ID = "mkwebappgenerator"
-APP_NAME = "MK Web App Generator"
+APP_ID = "mikelexp.appmeup"
+APP_NAME = "App Me Up"
 USER_APPLICATIONS_DIR = Path.home() / ".local/share/applications"
-ICON_DIR = Path.home() / ".local/share/icons/mkwebappgenerator"
-DEFAULT_CATEGORIES = "Network;WebBrowser;"
+ICON_DIR = Path.home() / ".local/share/icons/appmeup"
+DEFAULT_CATEGORIES = ""
 DEFAULT_CATEGORY_CHOICES = ["AudioVideo", "Development", "Education", "Game", "Graphics", "Network", "Office", "Settings", "System", "Utility", "WebBrowser"]
-WEBAPP_MARKER_KEY = "X-MKWebAppGenerator-WebApp"
-WEBAPP_VERSION_KEY = "X-MKWebAppGenerator-Version"
+WEBAPP_MARKER_KEY = "X-AppMeUp-WebApp"
+WEBAPP_VERSION_KEY = "X-AppMeUp-Version"
+ICON_SSL_IGNORE_KEY = "X-AppMeUp-IgnoreIconSSLErrors"
 ICON_PREVIEW_SIZE = 64
+
+
+def app_asset_path(name: str) -> Path:
+    return Path(__file__).resolve().with_name(name)
+
+
+def app_icon() -> QIcon:
+    icon_path = app_asset_path("icon.png")
+    return QIcon(str(icon_path)) if icon_path.exists() else QIcon()
 
 
 def detect_chromium() -> str:
@@ -186,6 +197,30 @@ def collect_existing_categories() -> list[str]:
     return sorted(categories, key=str.lower)
 
 
+def parse_categories(value: str) -> list[str]:
+    seen: set[str] = set()
+    categories: list[str] = []
+    for category in value.split(";"):
+        cleaned = category.strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            categories.append(cleaned)
+    return categories
+
+
+def serialize_categories(categories: Iterable[str]) -> str:
+    cleaned = [category.strip() for category in categories if category.strip()]
+    return f"{';'.join(cleaned)};" if cleaned else ""
+
+
+def append_category_value(current_value: str, category: str) -> str:
+    selected = parse_categories(current_value)
+    cleaned = category.strip()
+    if cleaned and cleaned not in selected:
+        selected.append(cleaned)
+    return serialize_categories(selected)
+
+
 def slugify(text: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9._-]+", "-", text.strip().lower())
     normalized = normalized.strip("._-")
@@ -228,7 +263,7 @@ class IconLinkParser(HTMLParser):
             self.links.append(href)
 
 
-def fetch_url(url: str) -> bytes:
+def fetch_url(url: str, ignore_ssl_errors: bool = False) -> bytes:
     request = Request(
         url,
         headers={
@@ -238,16 +273,17 @@ def fetch_url(url: str) -> bytes:
             )
         },
     )
-    with urlopen(request, timeout=10) as response:
+    context = ssl._create_unverified_context() if ignore_ssl_errors else None
+    with urlopen(request, timeout=10, context=context) as response:
         return response.read()
 
 
-def fetch_icon_for_url(page_url: str, slug: str) -> Path:
+def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False) -> Path:
     parsed = urlparse(page_url)
     if parsed.scheme not in {"http", "https"}:
         raise ValueError("The URL must use http or https.")
 
-    html_bytes = fetch_url(page_url)
+    html_bytes = fetch_url(page_url, ignore_ssl_errors=ignore_ssl_errors)
     parser = IconLinkParser()
     parser.feed(html_bytes.decode("utf-8", errors="ignore"))
 
@@ -266,7 +302,7 @@ def fetch_icon_for_url(page_url: str, slug: str) -> Path:
     errors: list[str] = []
     for candidate in candidates:
         try:
-            image_data = fetch_url(candidate)
+            image_data = fetch_url(candidate, ignore_ssl_errors=ignore_ssl_errors)
             pixmap = QPixmap()
             if not pixmap.loadFromData(image_data):
                 errors.append(f"{candidate}: unsupported format")
@@ -306,11 +342,13 @@ class WebAppConfig:
     enable_features: str = ""
     disable_features: str = ""
     extra_args: str = ""
+    ignore_icon_ssl_errors: bool = False
     new_window: bool = False
     incognito: bool = False
     kiosk: bool = False
     start_maximized: bool = False
     start_fullscreen: bool = False
+    ignore_certificate_errors: bool = False
     opened_from_existing: bool = False
 
     def ensure_filename(self) -> str:
@@ -348,6 +386,8 @@ class WebAppConfig:
             tokens.append(f"--enable-features={self.enable_features.strip()}")
         if self.disable_features.strip():
             tokens.append(f"--disable-features={self.disable_features.strip()}")
+        if self.ignore_certificate_errors:
+            tokens.append("--ignore-certificate-errors")
         if self.new_window:
             tokens.append("--new-window")
         if self.incognito:
@@ -382,11 +422,12 @@ class WebAppConfig:
             f"Comment={self.comment.strip()}",
             f"Exec={exec_line}",
             f"Icon={self.icon_path.strip()}",
-            f"Categories={self.categories.strip() or DEFAULT_CATEGORIES}",
+            f"Categories={serialize_categories(parse_categories(self.categories))}",
             "Terminal=false",
             "StartupNotify=true",
             f"{WEBAPP_MARKER_KEY}=true",
             f"{WEBAPP_VERSION_KEY}=1",
+            f"{ICON_SSL_IGNORE_KEY}={'true' if self.ignore_icon_ssl_errors else 'false'}",
             "",
         ]
         return "\n".join(lines)
@@ -411,6 +452,7 @@ def parse_exec(exec_line: str) -> tuple[list[str], dict[str, str | bool], list[s
         "--disable-features=": "disable_features",
     }
     known_bool_flags = {
+        "--ignore-certificate-errors": "ignore_certificate_errors",
         "--new-window": "new_window",
         "--incognito": "incognito",
         "--kiosk": "kiosk",
@@ -470,11 +512,13 @@ def load_desktop_file(path: Path) -> WebAppConfig:
         enable_features=str(options.get("enable_features", "")),
         disable_features=str(options.get("disable_features", "")),
         extra_args=shell_join(extra),
+        ignore_icon_ssl_errors=parse_bool(entry.get(ICON_SSL_IGNORE_KEY), default=False),
         new_window=bool(options.get("new_window", False)),
         incognito=bool(options.get("incognito", False)),
         kiosk=bool(options.get("kiosk", False)),
         start_maximized=bool(options.get("start_maximized", False)),
         start_fullscreen=bool(options.get("start_fullscreen", False)),
+        ignore_certificate_errors=bool(options.get("ignore_certificate_errors", False)),
         opened_from_existing=True,
     )
     return config
@@ -484,7 +528,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle(APP_NAME)
-        self.setMinimumSize(980, 760)
+        self.setWindowIcon(app_icon())
+        self.setMinimumSize(800, 500)
         self._dirty = False
         self._filename_auto_sync = True
         self.current_config = WebAppConfig()
@@ -553,14 +598,19 @@ class MainWindow(QMainWindow):
         self.comment_input.textEdited.connect(self.mark_dirty)
         form.addRow("Description", self.comment_input)
 
-        self.categories_input = QComboBox()
-        self.categories_input.setEditable(True)
-        self.categories_input.setInsertPolicy(QComboBox.InsertAtTop)
-        self.categories_input.addItems(collect_existing_categories())
-        self.categories_input.setCurrentText(DEFAULT_CATEGORIES)
-        self.categories_input.lineEdit().setPlaceholderText(DEFAULT_CATEGORIES)
-        self.categories_input.editTextChanged.connect(self.mark_dirty)
-        form.addRow("Categories", self.categories_input)
+        categories_row = QWidget()
+        categories_layout = QHBoxLayout(categories_row)
+        categories_layout.setContentsMargins(0, 0, 0, 0)
+        self.categories_select = QComboBox()
+        self.categories_select.addItem("Select a category…")
+        self.categories_select.addItems(collect_existing_categories())
+        self.categories_select.currentIndexChanged.connect(self._on_category_selected)
+        categories_layout.addWidget(self.categories_select)
+        self.categories_input = QLineEdit()
+        self.categories_input.setPlaceholderText("Network;WebBrowser;")
+        self.categories_input.textEdited.connect(self.mark_dirty)
+        categories_layout.addWidget(self.categories_input, stretch=1)
+        form.addRow("Categories", categories_row)
 
         filename_row = QWidget()
         filename_layout = QHBoxLayout(filename_row)
@@ -598,6 +648,9 @@ class MainWindow(QMainWindow):
         fetch_icon_button.clicked.connect(self.fetch_icon)
         icon_layout.addWidget(fetch_icon_button)
         form.addRow("Icon", icon_row)
+
+        self.ignore_icon_ssl_errors_check = self._check_box("Ignore SSL certificate errors when fetching icons")
+        form.addRow("Icon SSL", self.ignore_icon_ssl_errors_check)
 
         self.icon_preview_label = QLabel("No icon")
         self.icon_preview_label.setAlignment(Qt.AlignCenter)
@@ -669,7 +722,9 @@ class MainWindow(QMainWindow):
         self.kiosk_check = self._check_box("kiosk")
         self.start_maximized_check = self._check_box("start-maximized")
         self.start_fullscreen_check = self._check_box("start-fullscreen")
+        self.ignore_certificate_errors_check = self._check_box("ignore-certificate-errors")
         for checkbox in (
+            self.ignore_certificate_errors_check,
             self.new_window_check,
             self.incognito_check,
             self.kiosk_check,
@@ -738,6 +793,15 @@ class MainWindow(QMainWindow):
         if not self.icon_input.text().strip() and self.url_input.text().strip():
             self.fetch_icon(silent=True)
 
+    def _on_category_selected(self, index: int) -> None:
+        if index <= 0:
+            return
+        updated = append_category_value(self.categories_input.text(), self.categories_select.itemText(index))
+        self.categories_input.setText(updated)
+        with QSignalBlocker(self.categories_select):
+            self.categories_select.setCurrentIndex(0)
+        self.mark_dirty()
+
     def _update_target_label(self) -> None:
         filename = self.filename_input.text().strip() or "webapp.desktop"
         if not filename.endswith(".desktop"):
@@ -777,11 +841,12 @@ class MainWindow(QMainWindow):
             QSignalBlocker(self.name_input),
             QSignalBlocker(self.url_input),
             QSignalBlocker(self.comment_input),
+            QSignalBlocker(self.categories_select),
             QSignalBlocker(self.categories_input),
-            QSignalBlocker(self.categories_input.lineEdit()),
             QSignalBlocker(self.filename_input),
             QSignalBlocker(self.chromium_input),
             QSignalBlocker(self.icon_input),
+            QSignalBlocker(self.ignore_icon_ssl_errors_check),
             QSignalBlocker(self.user_data_dir_input["line_edit"]),
             QSignalBlocker(self.wm_class_input),
             QSignalBlocker(self.wm_name_input),
@@ -798,15 +863,18 @@ class MainWindow(QMainWindow):
             QSignalBlocker(self.kiosk_check),
             QSignalBlocker(self.start_maximized_check),
             QSignalBlocker(self.start_fullscreen_check),
+            QSignalBlocker(self.ignore_certificate_errors_check),
         ]
         try:
             self.name_input.setText(config.name)
             self.url_input.setText(config.url)
             self.comment_input.setText(config.comment)
-            self.categories_input.setEditText(config.categories)
+            self.categories_select.setCurrentIndex(0)
+            self.categories_input.setText(config.categories)
             self.filename_input.setText(config.desktop_filename)
             self.chromium_input.setText(config.chromium_path)
             self.icon_input.setText(config.icon_path)
+            self.ignore_icon_ssl_errors_check.setChecked(config.ignore_icon_ssl_errors)
             self.user_data_dir_input["line_edit"].setText(config.user_data_dir)
             self.wm_class_input.setText(config.wm_class)
             self.wm_name_input.setText(config.wm_name)
@@ -823,6 +891,7 @@ class MainWindow(QMainWindow):
             self.kiosk_check.setChecked(config.kiosk)
             self.start_maximized_check.setChecked(config.start_maximized)
             self.start_fullscreen_check.setChecked(config.start_fullscreen)
+            self.ignore_certificate_errors_check.setChecked(config.ignore_certificate_errors)
         finally:
             blockers.clear()
         self._dirty = False
@@ -838,7 +907,7 @@ class MainWindow(QMainWindow):
             name=self.name_input.text().strip(),
             url=self.url_input.text().strip(),
             comment=self.comment_input.text().strip(),
-            categories=self.categories_input.currentText().strip() or DEFAULT_CATEGORIES,
+            categories=serialize_categories(parse_categories(self.categories_input.text())),
             icon_path=self.icon_input.text().strip(),
             chromium_path=self.chromium_input.text().strip(),
             desktop_filename=filename,
@@ -854,11 +923,13 @@ class MainWindow(QMainWindow):
             enable_features=self.enable_features_input.text().strip(),
             disable_features=self.disable_features_input.text().strip(),
             extra_args=self.extra_args_input.toPlainText().strip(),
+            ignore_icon_ssl_errors=self.ignore_icon_ssl_errors_check.isChecked(),
             new_window=self.new_window_check.isChecked(),
             incognito=self.incognito_check.isChecked(),
             kiosk=self.kiosk_check.isChecked(),
             start_maximized=self.start_maximized_check.isChecked(),
             start_fullscreen=self.start_fullscreen_check.isChecked(),
+            ignore_certificate_errors=self.ignore_certificate_errors_check.isChecked(),
             opened_from_existing=bool(self.current_config.opened_from_existing),
         )
 
@@ -904,7 +975,11 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Downloading icon...")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            icon_path = fetch_icon_for_url(url, slug)
+            icon_path = fetch_icon_for_url(
+                url,
+                slug,
+                ignore_ssl_errors=self.ignore_icon_ssl_errors_check.isChecked(),
+            )
             self.icon_input.setText(str(icon_path))
             self.mark_dirty()
             self.statusBar().showMessage(f"Icon saved to {icon_path}")
@@ -1008,6 +1083,9 @@ def main() -> int:
     QApplication.setApplicationName(APP_NAME)
     QApplication.setDesktopFileName(APP_ID)
     app = QApplication(sys.argv)
+    icon = app_icon()
+    if not icon.isNull():
+        app.setWindowIcon(icon)
     window = MainWindow()
 
     if len(sys.argv) > 1:

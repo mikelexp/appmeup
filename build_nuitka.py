@@ -11,7 +11,8 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-MAIN_SCRIPT = PROJECT_ROOT / "mkwebapp_generator.py"
+MAIN_SCRIPT = PROJECT_ROOT / "appmeup.py"
+ICON_FILE = PROJECT_ROOT / "icon.png"
 BUILD_DIR = PROJECT_ROOT / "build"
 DIST_DIR = PROJECT_ROOT / "dist"
 
@@ -31,12 +32,13 @@ def build_command(onefile: bool) -> list[str]:
         "--follow-imports",
         "--python-flag=no_site",
         "--warn-unusual-code",
-        "--company-name=MK",
-        "--product-name=MK Web App Generator",
+        "--company-name=Mikele",
+        "--product-name=App Me Up",
         "--file-description=Create and edit Chromium web apps from .desktop files",
         "--file-version=1.0.0",
         "--product-version=1.0.0",
         "--nofollow-import-to=tkinter,test,unittest,pydoc",
+        f"--include-data-files={ICON_FILE}=icon.png",
         str(MAIN_SCRIPT),
     ]
 
@@ -57,9 +59,9 @@ def clean() -> None:
         BUILD_DIR,
         DIST_DIR,
         PROJECT_ROOT / "__pycache__",
-        PROJECT_ROOT / "mkwebapp_generator.build",
-        PROJECT_ROOT / "mkwebapp_generator.dist",
-        PROJECT_ROOT / "mkwebapp_generator.onefile-build",
+        PROJECT_ROOT / "appmeup.build",
+        PROJECT_ROOT / "appmeup.dist",
+        PROJECT_ROOT / "appmeup.onefile-build",
     ]
     for target in targets:
         if target.is_dir():
@@ -67,7 +69,7 @@ def clean() -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build MK Web App Generator with Nuitka.")
+    parser = argparse.ArgumentParser(description="Build App Me Up with Nuitka.")
     parser.add_argument("--onefile", action="store_true", help="Build a onefile binary instead of standalone.")
     parser.add_argument("--clean", action="store_true", help="Remove build artifacts before building.")
     parser.add_argument("--clean-only", action="store_true", help="Only remove build artifacts.")
