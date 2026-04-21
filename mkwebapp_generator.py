@@ -496,24 +496,22 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         self.setStatusBar(QStatusBar(self))
 
-        toolbar = self.addToolBar("Main")
-        toolbar.setMovable(False)
+        file_menu = self.menuBar().addMenu("File")
 
         new_action = QAction("New", self)
+        new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self.new_config)
-        toolbar.addAction(new_action)
+        file_menu.addAction(new_action)
 
-        open_action = QAction("Open .desktop", self)
+        open_action = QAction("Open .desktop…", self)
+        open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_desktop_dialog)
-        toolbar.addAction(open_action)
+        file_menu.addAction(open_action)
 
         save_action = QAction("Save", self)
+        save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_desktop)
-        toolbar.addAction(save_action)
-
-        fetch_icon_action = QAction("Fetch Icon", self)
-        fetch_icon_action.triggered.connect(self.fetch_icon)
-        toolbar.addAction(fetch_icon_action)
+        file_menu.addAction(save_action)
 
         central = QWidget(self)
         outer_layout = QVBoxLayout(central)
@@ -609,13 +607,6 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(form_group)
 
-        hints = QLabel(
-            "The Chromium fields cover the most common flags. "
-            "For anything else, use 'Extra flags'."
-        )
-        hints.setWordWrap(True)
-        layout.addWidget(hints)
-        layout.addStretch(1)
         return container
 
     def _build_chromium_tab(self) -> QWidget:
