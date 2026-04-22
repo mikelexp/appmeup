@@ -334,6 +334,8 @@ class WebAppConfig:
     user_data_dir: str = ""
     wm_class: str = ""
     wm_name: str = ""
+    app_id: str = ""
+    app_launch_url_for_shortcuts_menu_item: str = ""
     window_size: str = ""
     window_position: str = ""
     proxy_server: str = ""
@@ -341,6 +343,20 @@ class WebAppConfig:
     user_agent: str = ""
     enable_features: str = ""
     disable_features: str = ""
+    lang: str = ""
+    profile_directory: str = ""
+    remote_debugging_port: str = ""
+    vmodule: str = ""
+    trace_startup_file: str = ""
+    virtual_time_budget: str = ""
+    proxy_pac_url: str = ""
+    host_resolver_rules: str = ""
+    autoplay_policy: str = ""
+    use_gl: str = ""
+    force_device_scale_factor: str = ""
+    ozone_platform_hint: str = ""
+    disk_cache_dir: str = ""
+    disk_cache_size: str = ""
     extra_args: str = ""
     ignore_icon_ssl_errors: bool = False
     new_window: bool = False
@@ -349,6 +365,27 @@ class WebAppConfig:
     start_maximized: bool = False
     start_fullscreen: bool = False
     ignore_certificate_errors: bool = False
+    allow_insecure_localhost: bool = False
+    guest: bool = False
+    headless: bool = False
+    disable_gpu: bool = False
+    disable_extensions: bool = False
+    no_first_run: bool = False
+    auto_open_devtools_for_tabs: bool = False
+    disable_dev_shm_usage: bool = False
+    remote_debugging_pipe: bool = False
+    trace_startup: bool = False
+    enable_logging: bool = False
+    disable_web_security: bool = False
+    no_sandbox: bool = False
+    disable_background_networking: bool = False
+    disable_notifications: bool = False
+    mute_audio: bool = False
+    disable_popup_blocking: bool = False
+    disable_software_rasterizer: bool = False
+    disable_renderer_backgrounding: bool = False
+    process_per_site: bool = False
+    single_process: bool = False
     opened_from_existing: bool = False
 
     def ensure_filename(self) -> str:
@@ -372,6 +409,10 @@ class WebAppConfig:
             tokens.append(f"--class={self.wm_class.strip()}")
         if self.wm_name.strip():
             tokens.append(f"--name={self.wm_name.strip()}")
+        if self.app_id.strip():
+            tokens.append(f"--app-id={self.app_id.strip()}")
+        if self.app_launch_url_for_shortcuts_menu_item.strip():
+            tokens.append(f"--app-launch-url-for-shortcuts-menu-item={self.app_launch_url_for_shortcuts_menu_item.strip()}")
         if self.window_size.strip():
             tokens.append(f"--window-size={self.window_size.strip()}")
         if self.window_position.strip():
@@ -386,8 +427,38 @@ class WebAppConfig:
             tokens.append(f"--enable-features={self.enable_features.strip()}")
         if self.disable_features.strip():
             tokens.append(f"--disable-features={self.disable_features.strip()}")
+        if self.lang.strip():
+            tokens.append(f"--lang={self.lang.strip()}")
+        if self.profile_directory.strip():
+            tokens.append(f"--profile-directory={self.profile_directory.strip()}")
+        if self.remote_debugging_port.strip():
+            tokens.append(f"--remote-debugging-port={self.remote_debugging_port.strip()}")
+        if self.vmodule.strip():
+            tokens.append(f"--vmodule={self.vmodule.strip()}")
+        if self.trace_startup_file.strip():
+            tokens.append(f"--trace-startup-file={self.trace_startup_file.strip()}")
+        if self.virtual_time_budget.strip():
+            tokens.append(f"--virtual-time-budget={self.virtual_time_budget.strip()}")
+        if self.proxy_pac_url.strip():
+            tokens.append(f"--proxy-pac-url={self.proxy_pac_url.strip()}")
+        if self.host_resolver_rules.strip():
+            tokens.append(f"--host-resolver-rules={self.host_resolver_rules.strip()}")
+        if self.autoplay_policy.strip():
+            tokens.append(f"--autoplay-policy={self.autoplay_policy.strip()}")
+        if self.use_gl.strip():
+            tokens.append(f"--use-gl={self.use_gl.strip()}")
+        if self.force_device_scale_factor.strip():
+            tokens.append(f"--force-device-scale-factor={self.force_device_scale_factor.strip()}")
+        if self.ozone_platform_hint.strip():
+            tokens.append(f"--ozone-platform-hint={self.ozone_platform_hint.strip()}")
+        if self.disk_cache_dir.strip():
+            tokens.append(f"--disk-cache-dir={self.disk_cache_dir.strip()}")
+        if self.disk_cache_size.strip():
+            tokens.append(f"--disk-cache-size={self.disk_cache_size.strip()}")
         if self.ignore_certificate_errors:
             tokens.append("--ignore-certificate-errors")
+        if self.allow_insecure_localhost:
+            tokens.append("--allow-insecure-localhost")
         if self.new_window:
             tokens.append("--new-window")
         if self.incognito:
@@ -398,6 +469,46 @@ class WebAppConfig:
             tokens.append("--start-maximized")
         if self.start_fullscreen:
             tokens.append("--start-fullscreen")
+        if self.guest:
+            tokens.append("--guest")
+        if self.headless:
+            tokens.append("--headless")
+        if self.disable_gpu:
+            tokens.append("--disable-gpu")
+        if self.disable_extensions:
+            tokens.append("--disable-extensions")
+        if self.no_first_run:
+            tokens.append("--no-first-run")
+        if self.auto_open_devtools_for_tabs:
+            tokens.append("--auto-open-devtools-for-tabs")
+        if self.disable_dev_shm_usage:
+            tokens.append("--disable-dev-shm-usage")
+        if self.remote_debugging_pipe:
+            tokens.append("--remote-debugging-pipe")
+        if self.trace_startup:
+            tokens.append("--trace-startup")
+        if self.enable_logging:
+            tokens.append("--enable-logging")
+        if self.disable_web_security:
+            tokens.append("--disable-web-security")
+        if self.no_sandbox:
+            tokens.append("--no-sandbox")
+        if self.disable_background_networking:
+            tokens.append("--disable-background-networking")
+        if self.disable_notifications:
+            tokens.append("--disable-notifications")
+        if self.mute_audio:
+            tokens.append("--mute-audio")
+        if self.disable_popup_blocking:
+            tokens.append("--disable-popup-blocking")
+        if self.disable_software_rasterizer:
+            tokens.append("--disable-software-rasterizer")
+        if self.disable_renderer_backgrounding:
+            tokens.append("--disable-renderer-backgrounding")
+        if self.process_per_site:
+            tokens.append("--process-per-site")
+        if self.single_process:
+            tokens.append("--single-process")
 
         extra = self.extra_args.strip()
         if extra:
@@ -443,6 +554,8 @@ def parse_exec(exec_line: str) -> tuple[list[str], dict[str, str | bool], list[s
         "--user-data-dir=": "user_data_dir",
         "--class=": "wm_class",
         "--name=": "wm_name",
+        "--app-id=": "app_id",
+        "--app-launch-url-for-shortcuts-menu-item=": "app_launch_url_for_shortcuts_menu_item",
         "--window-size=": "window_size",
         "--window-position=": "window_position",
         "--proxy-server=": "proxy_server",
@@ -450,14 +563,49 @@ def parse_exec(exec_line: str) -> tuple[list[str], dict[str, str | bool], list[s
         "--user-agent=": "user_agent",
         "--enable-features=": "enable_features",
         "--disable-features=": "disable_features",
+        "--lang=": "lang",
+        "--profile-directory=": "profile_directory",
+        "--remote-debugging-port=": "remote_debugging_port",
+        "--vmodule=": "vmodule",
+        "--trace-startup-file=": "trace_startup_file",
+        "--virtual-time-budget=": "virtual_time_budget",
+        "--proxy-pac-url=": "proxy_pac_url",
+        "--host-resolver-rules=": "host_resolver_rules",
+        "--autoplay-policy=": "autoplay_policy",
+        "--use-gl=": "use_gl",
+        "--force-device-scale-factor=": "force_device_scale_factor",
+        "--ozone-platform-hint=": "ozone_platform_hint",
+        "--disk-cache-dir=": "disk_cache_dir",
+        "--disk-cache-size=": "disk_cache_size",
     }
     known_bool_flags = {
         "--ignore-certificate-errors": "ignore_certificate_errors",
+        "--allow-insecure-localhost": "allow_insecure_localhost",
         "--new-window": "new_window",
         "--incognito": "incognito",
         "--kiosk": "kiosk",
         "--start-maximized": "start_maximized",
         "--start-fullscreen": "start_fullscreen",
+        "--guest": "guest",
+        "--headless": "headless",
+        "--disable-gpu": "disable_gpu",
+        "--disable-extensions": "disable_extensions",
+        "--no-first-run": "no_first_run",
+        "--auto-open-devtools-for-tabs": "auto_open_devtools_for_tabs",
+        "--disable-dev-shm-usage": "disable_dev_shm_usage",
+        "--remote-debugging-pipe": "remote_debugging_pipe",
+        "--trace-startup": "trace_startup",
+        "--enable-logging": "enable_logging",
+        "--disable-web-security": "disable_web_security",
+        "--no-sandbox": "no_sandbox",
+        "--disable-background-networking": "disable_background_networking",
+        "--disable-notifications": "disable_notifications",
+        "--mute-audio": "mute_audio",
+        "--disable-popup-blocking": "disable_popup_blocking",
+        "--disable-software-rasterizer": "disable_software_rasterizer",
+        "--disable-renderer-backgrounding": "disable_renderer_backgrounding",
+        "--process-per-site": "process_per_site",
+        "--single-process": "single_process",
     }
 
     for token in tokens[1:]:
@@ -504,6 +652,8 @@ def load_desktop_file(path: Path) -> WebAppConfig:
         user_data_dir=str(options.get("user_data_dir", "")),
         wm_class=str(options.get("wm_class", "")),
         wm_name=str(options.get("wm_name", "")),
+        app_id=str(options.get("app_id", "")),
+        app_launch_url_for_shortcuts_menu_item=str(options.get("app_launch_url_for_shortcuts_menu_item", "")),
         window_size=str(options.get("window_size", "")),
         window_position=str(options.get("window_position", "")),
         proxy_server=str(options.get("proxy_server", "")),
@@ -511,6 +661,20 @@ def load_desktop_file(path: Path) -> WebAppConfig:
         user_agent=str(options.get("user_agent", "")),
         enable_features=str(options.get("enable_features", "")),
         disable_features=str(options.get("disable_features", "")),
+        lang=str(options.get("lang", "")),
+        profile_directory=str(options.get("profile_directory", "")),
+        remote_debugging_port=str(options.get("remote_debugging_port", "")),
+        vmodule=str(options.get("vmodule", "")),
+        trace_startup_file=str(options.get("trace_startup_file", "")),
+        virtual_time_budget=str(options.get("virtual_time_budget", "")),
+        proxy_pac_url=str(options.get("proxy_pac_url", "")),
+        host_resolver_rules=str(options.get("host_resolver_rules", "")),
+        autoplay_policy=str(options.get("autoplay_policy", "")),
+        use_gl=str(options.get("use_gl", "")),
+        force_device_scale_factor=str(options.get("force_device_scale_factor", "")),
+        ozone_platform_hint=str(options.get("ozone_platform_hint", "")),
+        disk_cache_dir=str(options.get("disk_cache_dir", "")),
+        disk_cache_size=str(options.get("disk_cache_size", "")),
         extra_args=shell_join(extra),
         ignore_icon_ssl_errors=parse_bool(entry.get(ICON_SSL_IGNORE_KEY), default=False),
         new_window=bool(options.get("new_window", False)),
@@ -519,6 +683,27 @@ def load_desktop_file(path: Path) -> WebAppConfig:
         start_maximized=bool(options.get("start_maximized", False)),
         start_fullscreen=bool(options.get("start_fullscreen", False)),
         ignore_certificate_errors=bool(options.get("ignore_certificate_errors", False)),
+        allow_insecure_localhost=bool(options.get("allow_insecure_localhost", False)),
+        guest=bool(options.get("guest", False)),
+        headless=bool(options.get("headless", False)),
+        disable_gpu=bool(options.get("disable_gpu", False)),
+        disable_extensions=bool(options.get("disable_extensions", False)),
+        no_first_run=bool(options.get("no_first_run", False)),
+        auto_open_devtools_for_tabs=bool(options.get("auto_open_devtools_for_tabs", False)),
+        disable_dev_shm_usage=bool(options.get("disable_dev_shm_usage", False)),
+        remote_debugging_pipe=bool(options.get("remote_debugging_pipe", False)),
+        trace_startup=bool(options.get("trace_startup", False)),
+        enable_logging=bool(options.get("enable_logging", False)),
+        disable_web_security=bool(options.get("disable_web_security", False)),
+        no_sandbox=bool(options.get("no_sandbox", False)),
+        disable_background_networking=bool(options.get("disable_background_networking", False)),
+        disable_notifications=bool(options.get("disable_notifications", False)),
+        mute_audio=bool(options.get("mute_audio", False)),
+        disable_popup_blocking=bool(options.get("disable_popup_blocking", False)),
+        disable_software_rasterizer=bool(options.get("disable_software_rasterizer", False)),
+        disable_renderer_backgrounding=bool(options.get("disable_renderer_backgrounding", False)),
+        process_per_site=bool(options.get("process_per_site", False)),
+        single_process=bool(options.get("single_process", False)),
         opened_from_existing=True,
     )
     return config
@@ -670,50 +855,103 @@ class MainWindow(QMainWindow):
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
 
-        form_group = QGroupBox("Chromium Flags")
-        grid = QGridLayout(form_group)
-
+        identity_group = QGroupBox("Identity And Profile")
+        identity_grid = QGridLayout(identity_group)
         self.user_data_dir_input = self._path_row_button("Browse", self.choose_user_data_dir)
-        grid.addWidget(QLabel("user-data-dir"), 0, 0)
-        grid.addWidget(self.user_data_dir_input["widget"], 0, 1)
-
-        self.wm_class_input = self._line_edit()
-        grid.addWidget(QLabel("class"), 1, 0)
-        grid.addWidget(self.wm_class_input, 1, 1)
-
-        self.wm_name_input = self._line_edit()
-        grid.addWidget(QLabel("name"), 2, 0)
-        grid.addWidget(self.wm_name_input, 2, 1)
-
-        self.window_size_input = self._line_edit("1280,800")
-        grid.addWidget(QLabel("window-size"), 3, 0)
-        grid.addWidget(self.window_size_input, 3, 1)
-
-        self.window_position_input = self._line_edit("50,50")
-        grid.addWidget(QLabel("window-position"), 4, 0)
-        grid.addWidget(self.window_position_input, 4, 1)
-
-        self.proxy_server_input = self._line_edit()
-        grid.addWidget(QLabel("proxy-server"), 5, 0)
-        grid.addWidget(self.proxy_server_input, 5, 1)
-
-        self.proxy_bypass_input = self._line_edit()
-        grid.addWidget(QLabel("proxy-bypass-list"), 6, 0)
-        grid.addWidget(self.proxy_bypass_input, 6, 1)
-
+        identity_grid.addWidget(QLabel("user-data-dir"), 0, 0)
+        identity_grid.addWidget(self.user_data_dir_input["widget"], 0, 1)
+        self.profile_directory_input = self._line_edit("Default")
+        identity_grid.addWidget(QLabel("profile-directory"), 1, 0)
+        identity_grid.addWidget(self.profile_directory_input, 1, 1)
+        self.lang_input = self._line_edit("en-US")
+        identity_grid.addWidget(QLabel("lang"), 2, 0)
+        identity_grid.addWidget(self.lang_input, 2, 1)
         self.user_agent_input = self._line_edit()
-        grid.addWidget(QLabel("user-agent"), 7, 0)
-        grid.addWidget(self.user_agent_input, 7, 1)
-
+        identity_grid.addWidget(QLabel("user-agent"), 3, 0)
+        identity_grid.addWidget(self.user_agent_input, 3, 1)
         self.enable_features_input = self._line_edit()
-        grid.addWidget(QLabel("enable-features"), 8, 0)
-        grid.addWidget(self.enable_features_input, 8, 1)
-
+        identity_grid.addWidget(QLabel("enable-features"), 4, 0)
+        identity_grid.addWidget(self.enable_features_input, 4, 1)
         self.disable_features_input = self._line_edit()
-        grid.addWidget(QLabel("disable-features"), 9, 0)
-        grid.addWidget(self.disable_features_input, 9, 1)
+        identity_grid.addWidget(QLabel("disable-features"), 5, 0)
+        identity_grid.addWidget(self.disable_features_input, 5, 1)
+        inner_layout.addWidget(identity_group)
 
-        inner_layout.addWidget(form_group)
+        app_group = QGroupBox("App And Window")
+        app_grid = QGridLayout(app_group)
+        self.wm_class_input = self._line_edit()
+        app_grid.addWidget(QLabel("class"), 0, 0)
+        app_grid.addWidget(self.wm_class_input, 0, 1)
+        self.wm_name_input = self._line_edit()
+        app_grid.addWidget(QLabel("name"), 1, 0)
+        app_grid.addWidget(self.wm_name_input, 1, 1)
+        self.app_id_input = self._line_edit()
+        app_grid.addWidget(QLabel("app-id"), 2, 0)
+        app_grid.addWidget(self.app_id_input, 2, 1)
+        self.app_launch_url_input = self._line_edit()
+        app_grid.addWidget(QLabel("app-launch-url-for-shortcuts-menu-item"), 3, 0)
+        app_grid.addWidget(self.app_launch_url_input, 3, 1)
+        self.window_size_input = self._line_edit("1280,800")
+        app_grid.addWidget(QLabel("window-size"), 4, 0)
+        app_grid.addWidget(self.window_size_input, 4, 1)
+        self.window_position_input = self._line_edit("50,50")
+        app_grid.addWidget(QLabel("window-position"), 5, 0)
+        app_grid.addWidget(self.window_position_input, 5, 1)
+        inner_layout.addWidget(app_group)
+
+        network_group = QGroupBox("Network")
+        network_grid = QGridLayout(network_group)
+        self.proxy_server_input = self._line_edit()
+        network_grid.addWidget(QLabel("proxy-server"), 0, 0)
+        network_grid.addWidget(self.proxy_server_input, 0, 1)
+        self.proxy_bypass_input = self._line_edit()
+        network_grid.addWidget(QLabel("proxy-bypass-list"), 1, 0)
+        network_grid.addWidget(self.proxy_bypass_input, 1, 1)
+        self.proxy_pac_url_input = self._line_edit()
+        network_grid.addWidget(QLabel("proxy-pac-url"), 2, 0)
+        network_grid.addWidget(self.proxy_pac_url_input, 2, 1)
+        self.host_resolver_rules_input = self._line_edit()
+        network_grid.addWidget(QLabel("host-resolver-rules"), 3, 0)
+        network_grid.addWidget(self.host_resolver_rules_input, 3, 1)
+        inner_layout.addWidget(network_group)
+
+        debug_group = QGroupBox("Debug And Automation")
+        debug_grid = QGridLayout(debug_group)
+        self.remote_debugging_port_input = self._line_edit("9222")
+        debug_grid.addWidget(QLabel("remote-debugging-port"), 0, 0)
+        debug_grid.addWidget(self.remote_debugging_port_input, 0, 1)
+        self.vmodule_input = self._line_edit()
+        debug_grid.addWidget(QLabel("vmodule"), 1, 0)
+        debug_grid.addWidget(self.vmodule_input, 1, 1)
+        self.trace_startup_file_input = self._line_edit()
+        debug_grid.addWidget(QLabel("trace-startup-file"), 2, 0)
+        debug_grid.addWidget(self.trace_startup_file_input, 2, 1)
+        self.virtual_time_budget_input = self._line_edit()
+        debug_grid.addWidget(QLabel("virtual-time-budget"), 3, 0)
+        debug_grid.addWidget(self.virtual_time_budget_input, 3, 1)
+        inner_layout.addWidget(debug_group)
+
+        rendering_group = QGroupBox("Rendering And Media")
+        rendering_grid = QGridLayout(rendering_group)
+        self.autoplay_policy_input = self._line_edit()
+        rendering_grid.addWidget(QLabel("autoplay-policy"), 0, 0)
+        rendering_grid.addWidget(self.autoplay_policy_input, 0, 1)
+        self.use_gl_input = self._line_edit()
+        rendering_grid.addWidget(QLabel("use-gl"), 1, 0)
+        rendering_grid.addWidget(self.use_gl_input, 1, 1)
+        self.force_device_scale_factor_input = self._line_edit("1.0")
+        rendering_grid.addWidget(QLabel("force-device-scale-factor"), 2, 0)
+        rendering_grid.addWidget(self.force_device_scale_factor_input, 2, 1)
+        self.ozone_platform_hint_input = self._line_edit("auto")
+        rendering_grid.addWidget(QLabel("ozone-platform-hint"), 3, 0)
+        rendering_grid.addWidget(self.ozone_platform_hint_input, 3, 1)
+        self.disk_cache_dir_input = self._line_edit()
+        rendering_grid.addWidget(QLabel("disk-cache-dir"), 4, 0)
+        rendering_grid.addWidget(self.disk_cache_dir_input, 4, 1)
+        self.disk_cache_size_input = self._line_edit()
+        rendering_grid.addWidget(QLabel("disk-cache-size"), 5, 0)
+        rendering_grid.addWidget(self.disk_cache_size_input, 5, 1)
+        inner_layout.addWidget(rendering_group)
 
         bool_group = QGroupBox("Boolean Flags")
         bool_layout = QVBoxLayout(bool_group)
@@ -723,13 +961,55 @@ class MainWindow(QMainWindow):
         self.start_maximized_check = self._check_box("start-maximized")
         self.start_fullscreen_check = self._check_box("start-fullscreen")
         self.ignore_certificate_errors_check = self._check_box("ignore-certificate-errors")
+        self.allow_insecure_localhost_check = self._check_box("allow-insecure-localhost")
+        self.guest_check = self._check_box("guest")
+        self.headless_check = self._check_box("headless")
+        self.disable_gpu_check = self._check_box("disable-gpu")
+        self.disable_extensions_check = self._check_box("disable-extensions")
+        self.no_first_run_check = self._check_box("no-first-run")
+        self.auto_open_devtools_check = self._check_box("auto-open-devtools-for-tabs")
+        self.disable_dev_shm_usage_check = self._check_box("disable-dev-shm-usage")
+        self.remote_debugging_pipe_check = self._check_box("remote-debugging-pipe")
+        self.trace_startup_check = self._check_box("trace-startup")
+        self.enable_logging_check = self._check_box("enable-logging")
+        self.disable_web_security_check = self._check_box("disable-web-security")
+        self.no_sandbox_check = self._check_box("no-sandbox")
+        self.disable_background_networking_check = self._check_box("disable-background-networking")
+        self.disable_notifications_check = self._check_box("disable-notifications")
+        self.mute_audio_check = self._check_box("mute-audio")
+        self.disable_popup_blocking_check = self._check_box("disable-popup-blocking")
+        self.disable_software_rasterizer_check = self._check_box("disable-software-rasterizer")
+        self.disable_renderer_backgrounding_check = self._check_box("disable-renderer-backgrounding")
+        self.process_per_site_check = self._check_box("process-per-site")
+        self.single_process_check = self._check_box("single-process")
         for checkbox in (
             self.ignore_certificate_errors_check,
+            self.allow_insecure_localhost_check,
             self.new_window_check,
             self.incognito_check,
             self.kiosk_check,
             self.start_maximized_check,
             self.start_fullscreen_check,
+            self.guest_check,
+            self.headless_check,
+            self.disable_gpu_check,
+            self.disable_extensions_check,
+            self.no_first_run_check,
+            self.auto_open_devtools_check,
+            self.disable_dev_shm_usage_check,
+            self.remote_debugging_pipe_check,
+            self.trace_startup_check,
+            self.enable_logging_check,
+            self.disable_web_security_check,
+            self.no_sandbox_check,
+            self.disable_background_networking_check,
+            self.disable_notifications_check,
+            self.mute_audio_check,
+            self.disable_popup_blocking_check,
+            self.disable_software_rasterizer_check,
+            self.disable_renderer_backgrounding_check,
+            self.process_per_site_check,
+            self.single_process_check,
         ):
             bool_layout.addWidget(checkbox)
         inner_layout.addWidget(bool_group)
@@ -850,6 +1130,8 @@ class MainWindow(QMainWindow):
             QSignalBlocker(self.user_data_dir_input["line_edit"]),
             QSignalBlocker(self.wm_class_input),
             QSignalBlocker(self.wm_name_input),
+            QSignalBlocker(self.app_id_input),
+            QSignalBlocker(self.app_launch_url_input),
             QSignalBlocker(self.window_size_input),
             QSignalBlocker(self.window_position_input),
             QSignalBlocker(self.proxy_server_input),
@@ -857,6 +1139,20 @@ class MainWindow(QMainWindow):
             QSignalBlocker(self.user_agent_input),
             QSignalBlocker(self.enable_features_input),
             QSignalBlocker(self.disable_features_input),
+            QSignalBlocker(self.lang_input),
+            QSignalBlocker(self.profile_directory_input),
+            QSignalBlocker(self.remote_debugging_port_input),
+            QSignalBlocker(self.vmodule_input),
+            QSignalBlocker(self.trace_startup_file_input),
+            QSignalBlocker(self.virtual_time_budget_input),
+            QSignalBlocker(self.proxy_pac_url_input),
+            QSignalBlocker(self.host_resolver_rules_input),
+            QSignalBlocker(self.autoplay_policy_input),
+            QSignalBlocker(self.use_gl_input),
+            QSignalBlocker(self.force_device_scale_factor_input),
+            QSignalBlocker(self.ozone_platform_hint_input),
+            QSignalBlocker(self.disk_cache_dir_input),
+            QSignalBlocker(self.disk_cache_size_input),
             QSignalBlocker(self.extra_args_input),
             QSignalBlocker(self.new_window_check),
             QSignalBlocker(self.incognito_check),
@@ -864,6 +1160,27 @@ class MainWindow(QMainWindow):
             QSignalBlocker(self.start_maximized_check),
             QSignalBlocker(self.start_fullscreen_check),
             QSignalBlocker(self.ignore_certificate_errors_check),
+            QSignalBlocker(self.allow_insecure_localhost_check),
+            QSignalBlocker(self.guest_check),
+            QSignalBlocker(self.headless_check),
+            QSignalBlocker(self.disable_gpu_check),
+            QSignalBlocker(self.disable_extensions_check),
+            QSignalBlocker(self.no_first_run_check),
+            QSignalBlocker(self.auto_open_devtools_check),
+            QSignalBlocker(self.disable_dev_shm_usage_check),
+            QSignalBlocker(self.remote_debugging_pipe_check),
+            QSignalBlocker(self.trace_startup_check),
+            QSignalBlocker(self.enable_logging_check),
+            QSignalBlocker(self.disable_web_security_check),
+            QSignalBlocker(self.no_sandbox_check),
+            QSignalBlocker(self.disable_background_networking_check),
+            QSignalBlocker(self.disable_notifications_check),
+            QSignalBlocker(self.mute_audio_check),
+            QSignalBlocker(self.disable_popup_blocking_check),
+            QSignalBlocker(self.disable_software_rasterizer_check),
+            QSignalBlocker(self.disable_renderer_backgrounding_check),
+            QSignalBlocker(self.process_per_site_check),
+            QSignalBlocker(self.single_process_check),
         ]
         try:
             self.name_input.setText(config.name)
@@ -878,6 +1195,8 @@ class MainWindow(QMainWindow):
             self.user_data_dir_input["line_edit"].setText(config.user_data_dir)
             self.wm_class_input.setText(config.wm_class)
             self.wm_name_input.setText(config.wm_name)
+            self.app_id_input.setText(config.app_id)
+            self.app_launch_url_input.setText(config.app_launch_url_for_shortcuts_menu_item)
             self.window_size_input.setText(config.window_size)
             self.window_position_input.setText(config.window_position)
             self.proxy_server_input.setText(config.proxy_server)
@@ -885,6 +1204,20 @@ class MainWindow(QMainWindow):
             self.user_agent_input.setText(config.user_agent)
             self.enable_features_input.setText(config.enable_features)
             self.disable_features_input.setText(config.disable_features)
+            self.lang_input.setText(config.lang)
+            self.profile_directory_input.setText(config.profile_directory)
+            self.remote_debugging_port_input.setText(config.remote_debugging_port)
+            self.vmodule_input.setText(config.vmodule)
+            self.trace_startup_file_input.setText(config.trace_startup_file)
+            self.virtual_time_budget_input.setText(config.virtual_time_budget)
+            self.proxy_pac_url_input.setText(config.proxy_pac_url)
+            self.host_resolver_rules_input.setText(config.host_resolver_rules)
+            self.autoplay_policy_input.setText(config.autoplay_policy)
+            self.use_gl_input.setText(config.use_gl)
+            self.force_device_scale_factor_input.setText(config.force_device_scale_factor)
+            self.ozone_platform_hint_input.setText(config.ozone_platform_hint)
+            self.disk_cache_dir_input.setText(config.disk_cache_dir)
+            self.disk_cache_size_input.setText(config.disk_cache_size)
             self.extra_args_input.setPlainText(config.extra_args)
             self.new_window_check.setChecked(config.new_window)
             self.incognito_check.setChecked(config.incognito)
@@ -892,6 +1225,27 @@ class MainWindow(QMainWindow):
             self.start_maximized_check.setChecked(config.start_maximized)
             self.start_fullscreen_check.setChecked(config.start_fullscreen)
             self.ignore_certificate_errors_check.setChecked(config.ignore_certificate_errors)
+            self.allow_insecure_localhost_check.setChecked(config.allow_insecure_localhost)
+            self.guest_check.setChecked(config.guest)
+            self.headless_check.setChecked(config.headless)
+            self.disable_gpu_check.setChecked(config.disable_gpu)
+            self.disable_extensions_check.setChecked(config.disable_extensions)
+            self.no_first_run_check.setChecked(config.no_first_run)
+            self.auto_open_devtools_check.setChecked(config.auto_open_devtools_for_tabs)
+            self.disable_dev_shm_usage_check.setChecked(config.disable_dev_shm_usage)
+            self.remote_debugging_pipe_check.setChecked(config.remote_debugging_pipe)
+            self.trace_startup_check.setChecked(config.trace_startup)
+            self.enable_logging_check.setChecked(config.enable_logging)
+            self.disable_web_security_check.setChecked(config.disable_web_security)
+            self.no_sandbox_check.setChecked(config.no_sandbox)
+            self.disable_background_networking_check.setChecked(config.disable_background_networking)
+            self.disable_notifications_check.setChecked(config.disable_notifications)
+            self.mute_audio_check.setChecked(config.mute_audio)
+            self.disable_popup_blocking_check.setChecked(config.disable_popup_blocking)
+            self.disable_software_rasterizer_check.setChecked(config.disable_software_rasterizer)
+            self.disable_renderer_backgrounding_check.setChecked(config.disable_renderer_backgrounding)
+            self.process_per_site_check.setChecked(config.process_per_site)
+            self.single_process_check.setChecked(config.single_process)
         finally:
             blockers.clear()
         self._dirty = False
@@ -915,6 +1269,8 @@ class MainWindow(QMainWindow):
             user_data_dir=self.user_data_dir_input["line_edit"].text().strip(),
             wm_class=self.wm_class_input.text().strip(),
             wm_name=self.wm_name_input.text().strip(),
+            app_id=self.app_id_input.text().strip(),
+            app_launch_url_for_shortcuts_menu_item=self.app_launch_url_input.text().strip(),
             window_size=self.window_size_input.text().strip(),
             window_position=self.window_position_input.text().strip(),
             proxy_server=self.proxy_server_input.text().strip(),
@@ -922,6 +1278,20 @@ class MainWindow(QMainWindow):
             user_agent=self.user_agent_input.text().strip(),
             enable_features=self.enable_features_input.text().strip(),
             disable_features=self.disable_features_input.text().strip(),
+            lang=self.lang_input.text().strip(),
+            profile_directory=self.profile_directory_input.text().strip(),
+            remote_debugging_port=self.remote_debugging_port_input.text().strip(),
+            vmodule=self.vmodule_input.text().strip(),
+            trace_startup_file=self.trace_startup_file_input.text().strip(),
+            virtual_time_budget=self.virtual_time_budget_input.text().strip(),
+            proxy_pac_url=self.proxy_pac_url_input.text().strip(),
+            host_resolver_rules=self.host_resolver_rules_input.text().strip(),
+            autoplay_policy=self.autoplay_policy_input.text().strip(),
+            use_gl=self.use_gl_input.text().strip(),
+            force_device_scale_factor=self.force_device_scale_factor_input.text().strip(),
+            ozone_platform_hint=self.ozone_platform_hint_input.text().strip(),
+            disk_cache_dir=self.disk_cache_dir_input.text().strip(),
+            disk_cache_size=self.disk_cache_size_input.text().strip(),
             extra_args=self.extra_args_input.toPlainText().strip(),
             ignore_icon_ssl_errors=self.ignore_icon_ssl_errors_check.isChecked(),
             new_window=self.new_window_check.isChecked(),
@@ -930,6 +1300,27 @@ class MainWindow(QMainWindow):
             start_maximized=self.start_maximized_check.isChecked(),
             start_fullscreen=self.start_fullscreen_check.isChecked(),
             ignore_certificate_errors=self.ignore_certificate_errors_check.isChecked(),
+            allow_insecure_localhost=self.allow_insecure_localhost_check.isChecked(),
+            guest=self.guest_check.isChecked(),
+            headless=self.headless_check.isChecked(),
+            disable_gpu=self.disable_gpu_check.isChecked(),
+            disable_extensions=self.disable_extensions_check.isChecked(),
+            no_first_run=self.no_first_run_check.isChecked(),
+            auto_open_devtools_for_tabs=self.auto_open_devtools_check.isChecked(),
+            disable_dev_shm_usage=self.disable_dev_shm_usage_check.isChecked(),
+            remote_debugging_pipe=self.remote_debugging_pipe_check.isChecked(),
+            trace_startup=self.trace_startup_check.isChecked(),
+            enable_logging=self.enable_logging_check.isChecked(),
+            disable_web_security=self.disable_web_security_check.isChecked(),
+            no_sandbox=self.no_sandbox_check.isChecked(),
+            disable_background_networking=self.disable_background_networking_check.isChecked(),
+            disable_notifications=self.disable_notifications_check.isChecked(),
+            mute_audio=self.mute_audio_check.isChecked(),
+            disable_popup_blocking=self.disable_popup_blocking_check.isChecked(),
+            disable_software_rasterizer=self.disable_software_rasterizer_check.isChecked(),
+            disable_renderer_backgrounding=self.disable_renderer_backgrounding_check.isChecked(),
+            process_per_site=self.process_per_site_check.isChecked(),
+            single_process=self.single_process_check.isChecked(),
             opened_from_existing=bool(self.current_config.opened_from_existing),
         )
 
