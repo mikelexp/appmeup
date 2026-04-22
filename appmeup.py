@@ -31,6 +31,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -44,8 +46,13 @@ from PySide6.QtWidgets import (
 
 
 APP_ID = "mikelexp.appmeup"
-APP_NAME = "App Me Up"
+APP_NAME = "App Me Up!"
 USER_APPLICATIONS_DIR = Path.home() / ".local/share/applications"
+DESKTOP_APPLICATION_DIRS = [
+    USER_APPLICATIONS_DIR,
+    Path("/usr/local/share/applications"),
+    Path("/usr/share/applications"),
+]
 ICON_DIR = Path.home() / ".local/share/icons/appmeup"
 DEFAULT_CATEGORIES = ""
 DEFAULT_CATEGORY_CHOICES = ["AudioVideo", "Development", "Education", "Game", "Graphics", "Network", "Office", "Settings", "System", "Utility", "WebBrowser"]
@@ -168,14 +175,9 @@ def reveal_in_file_manager(path: Path) -> None:
 
 
 def collect_existing_categories() -> list[str]:
-    desktop_dirs = [
-        USER_APPLICATIONS_DIR,
-        Path("/usr/local/share/applications"),
-        Path("/usr/share/applications"),
-    ]
     categories = set(DEFAULT_CATEGORY_CHOICES)
 
-    for directory in desktop_dirs:
+    for directory in DESKTOP_APPLICATION_DIRS:
         if not directory.exists():
             continue
         for desktop_file in directory.glob("*.desktop"):
@@ -709,6 +711,26 @@ def load_desktop_file(path: Path) -> WebAppConfig:
     return config
 
 
+def collect_existing_webapps() -> list[WebAppConfig]:
+    webapps: list[WebAppConfig] = []
+    seen: set[Path] = set()
+
+    for directory in DESKTOP_APPLICATION_DIRS:
+        if not directory.exists():
+            continue
+        for desktop_file in sorted(directory.glob("*.desktop"), key=lambda path: path.name.lower()):
+            resolved = desktop_file.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                webapps.append(load_desktop_file(desktop_file))
+            except (OSError, configparser.Error, UnicodeDecodeError, ValueError):
+                continue
+
+    return sorted(webapps, key=lambda config: (config.name.lower(), config.desktop_filename.lower()))
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -721,6 +743,7 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self.load_config(self.current_config)
+        self.refresh_webapps_list()
         self.statusBar().showMessage("Ready.")
 
     def _build_ui(self) -> None:
@@ -746,10 +769,13 @@ class MainWindow(QMainWindow):
         central = QWidget(self)
         outer_layout = QVBoxLayout(central)
 
-        tabs = QTabWidget()
-        tabs.addTab(self._build_basic_tab(), "Basic")
-        tabs.addTab(self._build_chromium_tab(), "Chromium")
-        outer_layout.addWidget(tabs)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_basic_tab(), "Web App Options")
+        self.tabs.addTab(self._build_chromium_tab(), "Chromium Options")
+        self.webapps_tab = self._build_webapps_tab()
+        self.tabs.addTab(self.webapps_tab, "Installed Web Apps")
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        outer_layout.addWidget(self.tabs)
 
         actions_layout = QHBoxLayout()
         self.target_path_label = QLabel()
@@ -762,6 +788,24 @@ class MainWindow(QMainWindow):
         outer_layout.addLayout(actions_layout)
 
         self.setCentralWidget(central)
+
+    def _build_webapps_tab(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+
+        actions_layout = QHBoxLayout()
+        self.webapps_count_label = QLabel()
+        actions_layout.addWidget(self.webapps_count_label, stretch=1)
+        refresh_button = QPushButton("Refresh")
+        refresh_button.clicked.connect(self.refresh_webapps_list)
+        actions_layout.addWidget(refresh_button)
+        layout.addLayout(actions_layout)
+
+        self.webapps_list = QListWidget()
+        self.webapps_list.itemDoubleClicked.connect(self.open_webapp_list_item)
+        layout.addWidget(self.webapps_list)
+
+        return container
 
     def _build_basic_tab(self) -> QWidget:
         container = QWidget()
@@ -1050,6 +1094,31 @@ class MainWindow(QMainWindow):
         checkbox = QCheckBox(text)
         checkbox.toggled.connect(self.mark_dirty)
         return checkbox
+
+    def _on_tab_changed(self, index: int) -> None:
+        if self.tabs.widget(index) == self.webapps_tab:
+            self.refresh_webapps_list()
+
+    def refresh_webapps_list(self, *_args) -> None:
+        self.webapps_list.clear()
+        for config in collect_existing_webapps():
+            title = config.name or config.desktop_filename
+            detail = config.url or config.desktop_path
+            item = QListWidgetItem(f"{title}\n{detail}")
+            item.setData(Qt.UserRole, config.desktop_path)
+            item.setToolTip(config.desktop_path)
+            self.webapps_list.addItem(item)
+
+        count = self.webapps_list.count()
+        label = "webapp" if count == 1 else "webapps"
+        self.webapps_count_label.setText(f"{count} {label} found")
+
+    def open_webapp_list_item(self, item: QListWidgetItem) -> None:
+        if not self._confirm_discard():
+            return
+        path = item.data(Qt.UserRole)
+        if path and self.open_desktop(Path(path)):
+            self.tabs.setCurrentIndex(0)
 
     def mark_dirty(self, *_args) -> None:
         self._dirty = True
@@ -1389,14 +1458,15 @@ class MainWindow(QMainWindow):
         if path:
             self.open_desktop(Path(path))
 
-    def open_desktop(self, path: Path) -> None:
+    def open_desktop(self, path: Path) -> bool:
         try:
             config = load_desktop_file(path)
         except Exception as exc:
             QMessageBox.warning(self, APP_NAME, str(exc))
-            return
+            return False
         self.load_config(config)
         self.statusBar().showMessage(f"Loaded: {path}")
+        return True
 
     def open_desktop_folder(self, *_args) -> None:
         filename = self.filename_input.text().strip() or "webapp.desktop"
@@ -1449,6 +1519,7 @@ class MainWindow(QMainWindow):
             APP_NAME,
             "File saved successfully.\n\n" + "\n".join(refresh_results),
         )
+        self.refresh_webapps_list()
         self.statusBar().showMessage(f"Saved: {target}")
 
     def _confirm_discard(self) -> bool:
