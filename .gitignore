@@ -5,3 +5,4 @@ dist/
 *.build/
 *.dist/
 *.onefile-build/
+/.vscode
