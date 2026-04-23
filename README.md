@@ -1,4 +1,4 @@
-# AppMeUp
+# AppMeUp!
 
 Desktop app for creating and editing Chromium-based web apps from `.desktop` launchers.
 
@@ -8,6 +8,16 @@ Desktop app for creating and editing Chromium-based web apps from `.desktop` lau
 - Edit existing Chromium web apps
 - Fetch site icons automatically when possible
 - Refresh the desktop app menu after changes
+
+## Screenshots
+
+![](screenshots/Screenshot_20260423_132155.png) 
+![](screenshots/Screenshot_20260423_132222.png) 
+![](screenshots/Screenshot_20260423_132239.png) 
+![](screenshots/Screenshot_20260423_132300.png) 
+![](screenshots/Screenshot_20260423_132317.png) 
+![](screenshots/Screenshot_20260423_132336.png) 
+![](screenshots/Screenshot_20260423_132410.png) 
 
 ## Run
 
