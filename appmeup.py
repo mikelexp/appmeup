@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
 
 
 APP_ID = "mikelexp.appmeup"
-APP_NAME = "App Me Up!"
+APP_NAME = "AppMeUp!"
 USER_APPLICATIONS_DIR = Path.home() / ".local/share/applications"
 DESKTOP_APPLICATION_DIRS = [
     USER_APPLICATIONS_DIR,
@@ -54,6 +54,7 @@ DESKTOP_APPLICATION_DIRS = [
     Path("/usr/share/applications"),
 ]
 ICON_DIR = Path.home() / ".local/share/icons/appmeup"
+PROFILE_DIR = Path.home() / ".local/share/appmeup/profiles"
 DEFAULT_CATEGORIES = ""
 DEFAULT_CATEGORY_CHOICES = ["AudioVideo", "Development", "Education", "Game", "Graphics", "Network", "Office", "Settings", "System", "Utility", "WebBrowser"]
 WEBAPP_MARKER_KEY = "X-AppMeUp-WebApp"
@@ -242,6 +243,11 @@ def shell_join(tokens: Iterable[str]) -> str:
     return shlex.join(list(tokens))
 
 
+def default_user_data_dir(desktop_filename: str) -> str:
+    stem = Path(desktop_filename.strip() or "webapp.desktop").stem
+    return str(PROFILE_DIR / slugify(stem))
+
+
 def parse_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
@@ -397,6 +403,26 @@ class WebAppConfig:
         self.desktop_filename = filename
         return filename
 
+    def effective_wm_class(self) -> str:
+        explicit = self.wm_class.strip()
+        if explicit:
+            return slugify(explicit)
+
+        filename = Path(self.ensure_filename()).stem
+        derived = slugify(filename)
+        if derived and derived != "webapp":
+            return derived
+
+        derived = slugify(self.name)
+        if derived and derived != "webapp":
+            return derived
+
+        derived = slugify(urlparse(self.url.strip()).netloc)
+        if derived and derived != "webapp":
+            return derived
+
+        return "appmeup-webapp"
+
     def build_exec_tokens(self) -> list[str]:
         resolved_chromium = resolve_executable(self.chromium_path)
         if not resolved_chromium:
@@ -404,11 +430,12 @@ class WebAppConfig:
         if not self.url.strip():
             raise ValueError("The URL is required.")
 
+        wm_class = self.effective_wm_class()
         tokens = [resolved_chromium, f"--app={self.url.strip()}"]
         if self.user_data_dir.strip():
             tokens.append(f"--user-data-dir={self.user_data_dir.strip()}")
-        if self.wm_class.strip():
-            tokens.append(f"--class={self.wm_class.strip()}")
+        if wm_class:
+            tokens.append(f"--class={wm_class}")
         if self.wm_name.strip():
             tokens.append(f"--name={self.wm_name.strip()}")
         if self.app_id.strip():
@@ -525,6 +552,7 @@ class WebAppConfig:
         filename = self.ensure_filename()
         target_path = USER_APPLICATIONS_DIR / filename
         self.desktop_path = str(target_path)
+        self.wm_class = self.effective_wm_class()
         exec_line = shell_join(self.build_exec_tokens())
 
         lines = [
@@ -538,6 +566,7 @@ class WebAppConfig:
             f"Categories={serialize_categories(parse_categories(self.categories))}",
             "Terminal=false",
             "StartupNotify=true",
+            f"StartupWMClass={self.wm_class}",
             f"{WEBAPP_MARKER_KEY}=true",
             f"{WEBAPP_VERSION_KEY}=1",
             f"{ICON_SSL_IGNORE_KEY}={'true' if self.ignore_icon_ssl_errors else 'false'}",
@@ -652,7 +681,7 @@ def load_desktop_file(path: Path) -> WebAppConfig:
         desktop_filename=path.name,
         desktop_path=str(path),
         user_data_dir=str(options.get("user_data_dir", "")),
-        wm_class=str(options.get("wm_class", "")),
+        wm_class=str(options.get("wm_class", entry.get("StartupWMClass", ""))),
         wm_name=str(options.get("wm_name", "")),
         app_id=str(options.get("app_id", "")),
         app_launch_url_for_shortcuts_menu_item=str(options.get("app_launch_url_for_shortcuts_menu_item", "")),
@@ -1130,11 +1159,18 @@ class MainWindow(QMainWindow):
             suggested = f"{slugify(text)}.desktop"
             with QSignalBlocker(self.filename_input):
                 self.filename_input.setText(suggested)
-            self._update_target_label()
+        self._sync_derived_paths()
 
     def _on_filename_changed(self, *_args) -> None:
         self._filename_auto_sync = False
         self.mark_dirty()
+        self._sync_derived_paths()
+
+    def _sync_derived_paths(self) -> None:
+        if not self.user_data_dir_input["line_edit"].text().strip():
+            filename = self.filename_input.text().strip() or "webapp.desktop"
+            with QSignalBlocker(self.user_data_dir_input["line_edit"]):
+                self.user_data_dir_input["line_edit"].setText(default_user_data_dir(filename))
         self._update_target_label()
 
     def _on_url_edit_finished(self) -> None:
@@ -1261,7 +1297,9 @@ class MainWindow(QMainWindow):
             self.chromium_input.setText(config.chromium_path)
             self.icon_input.setText(config.icon_path)
             self.ignore_icon_ssl_errors_check.setChecked(config.ignore_icon_ssl_errors)
-            self.user_data_dir_input["line_edit"].setText(config.user_data_dir)
+            self.user_data_dir_input["line_edit"].setText(
+                config.user_data_dir or default_user_data_dir(config.desktop_filename)
+            )
             self.wm_class_input.setText(config.wm_class)
             self.wm_name_input.setText(config.wm_name)
             self.app_id_input.setText(config.app_id)
@@ -1326,6 +1364,7 @@ class MainWindow(QMainWindow):
         if not filename.endswith(".desktop"):
             filename = f"{filename}.desktop"
         desktop_path = str(USER_APPLICATIONS_DIR / filename)
+        user_data_dir = self.user_data_dir_input["line_edit"].text().strip() or default_user_data_dir(filename)
         return WebAppConfig(
             name=self.name_input.text().strip(),
             url=self.url_input.text().strip(),
@@ -1335,7 +1374,7 @@ class MainWindow(QMainWindow):
             chromium_path=self.chromium_input.text().strip(),
             desktop_filename=filename,
             desktop_path=desktop_path,
-            user_data_dir=self.user_data_dir_input["line_edit"].text().strip(),
+            user_data_dir=user_data_dir,
             wm_class=self.wm_class_input.text().strip(),
             wm_name=self.wm_name_input.text().strip(),
             app_id=self.app_id_input.text().strip(),
