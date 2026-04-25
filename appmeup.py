@@ -19,8 +19,9 @@ from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from PySide6.QtCore import QSignalBlocker, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QPixmap
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -54,6 +56,7 @@ DESKTOP_APPLICATION_DIRS = [
     Path("/usr/share/applications"),
 ]
 ICON_DIR = Path.home() / ".local/share/icons/appmeup"
+ICON_THEME_DIR = Path.home() / ".local/share/icons/hicolor"
 PROFILE_DIR = Path.home() / ".local/share/appmeup/profiles"
 DEFAULT_CATEGORIES = ""
 DEFAULT_CATEGORY_CHOICES = ["AudioVideo", "Development", "Education", "Game", "Graphics", "Network", "Office", "Settings", "System", "Utility", "WebBrowser"]
@@ -70,6 +73,22 @@ def app_asset_path(name: str) -> Path:
 def app_icon() -> QIcon:
     icon_path = app_asset_path("icon.png")
     return QIcon(str(icon_path)) if icon_path.exists() else QIcon()
+
+
+def webapp_icon(icon_name: str) -> QIcon:
+    candidate = icon_name.strip()
+    if not candidate:
+        return app_icon()
+
+    path = Path(candidate).expanduser()
+    if path.exists():
+        return QIcon(str(path))
+
+    theme_icon = QIcon.fromTheme(candidate)
+    if not theme_icon.isNull():
+        return theme_icon
+
+    return app_icon()
 
 
 def detect_chromium() -> str:
@@ -119,6 +138,10 @@ def detect_refresh_commands() -> list[list[str]]:
     # Force desktop menu rebuild — picks up new entries immediately in XFCE, MATE, Cinnamon, LXQt
     if shutil.which("xdg-desktop-menu"):
         commands.append(["xdg-desktop-menu", "forceupdate"])
+
+    # Refresh the local icon theme cache so updated launcher icons are visible immediately.
+    if shutil.which("gtk-update-icon-cache") and ICON_THEME_DIR.exists():
+        commands.append(["gtk-update-icon-cache", "-f", "-t", str(ICON_THEME_DIR)])
 
     # GNOME Shell: notify the shell via dbus so the launcher updates without a logout
     if "gnome" in de or "budgie" in de or "unity" in de:
@@ -780,8 +803,14 @@ def collect_existing_webapps() -> list[WebAppConfig]:
                 continue
             seen.add(resolved)
             try:
+                parser = configparser.ConfigParser(interpolation=None)
+                with desktop_file.open("r", encoding="utf-8") as handle:
+                    parser.read_file(handle)
+                entry = parser["Desktop Entry"]
+                if not parse_bool(entry.get(WEBAPP_MARKER_KEY), default=False):
+                    continue
                 webapps.append(load_desktop_file(desktop_file))
-            except (OSError, configparser.Error, UnicodeDecodeError, ValueError):
+            except (OSError, configparser.Error, UnicodeDecodeError, ValueError, KeyError):
                 continue
 
     return sorted(webapps, key=lambda config: (config.name.lower(), config.desktop_filename.lower()))
@@ -858,7 +887,11 @@ class MainWindow(QMainWindow):
         layout.addLayout(actions_layout)
 
         self.webapps_list = QListWidget()
+        self.webapps_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.webapps_list.setSpacing(8)
         self.webapps_list.itemDoubleClicked.connect(self.open_webapp_list_item)
+        self.webapps_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.webapps_list.customContextMenuRequested.connect(self._show_webapp_context_menu)
         layout.addWidget(self.webapps_list)
 
         return container
@@ -1158,12 +1191,13 @@ class MainWindow(QMainWindow):
     def refresh_webapps_list(self, *_args) -> None:
         self.webapps_list.clear()
         for config in collect_existing_webapps():
-            title = config.name or config.desktop_filename
-            detail = config.url or config.desktop_path
-            item = QListWidgetItem(f"{title}\n{detail}")
+            item_widget = self._build_webapp_item_widget(config)
+            item = QListWidgetItem()
             item.setData(Qt.UserRole, config.desktop_path)
             item.setToolTip(config.desktop_path)
+            item.setSizeHint(item_widget.sizeHint())
             self.webapps_list.addItem(item)
+            self.webapps_list.setItemWidget(item, item_widget)
 
         count = self.webapps_list.count()
         label = "webapp" if count == 1 else "webapps"
@@ -1175,6 +1209,173 @@ class MainWindow(QMainWindow):
         path = item.data(Qt.UserRole)
         if path and self.open_desktop(Path(path)):
             self.tabs.setCurrentIndex(0)
+
+    def uninstall_webapp(self, item: QListWidgetItem) -> None:
+        path = item.data(Qt.UserRole)
+        if not path:
+            return
+
+        desktop_path = Path(path)
+        if not self._is_user_webapp(desktop_path):
+            QMessageBox.information(
+                self,
+                APP_NAME,
+                "Only user-installed web apps can be removed from here.",
+            )
+            return
+
+        try:
+            config = load_desktop_file(desktop_path)
+        except Exception:
+            config = WebAppConfig(desktop_path=str(desktop_path), desktop_filename=desktop_path.name)
+
+        message = (
+            f"Remove '{config.name or config.desktop_filename}'?\n\n"
+            f"This will delete:\n"
+            f"- {desktop_path}\n"
+        )
+        icon_path = Path(config.icon_path).expanduser() if config.icon_path.strip() else None
+        if icon_path and icon_path.exists() and self._is_managed_icon_path(icon_path):
+            message += f"- {icon_path}\n"
+
+        answer = QMessageBox.question(
+            self,
+            APP_NAME,
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+
+        errors: list[str] = []
+        try:
+            if desktop_path.exists():
+                desktop_path.unlink()
+        except OSError as exc:
+            errors.append(f"Could not remove {desktop_path}: {exc}")
+
+        if icon_path and icon_path.exists() and self._is_managed_icon_path(icon_path):
+            try:
+                icon_path.unlink()
+            except OSError as exc:
+                errors.append(f"Could not remove {icon_path}: {exc}")
+
+        refresh_results = run_refresh_commands()
+        self.refresh_webapps_list()
+
+        if errors:
+            QMessageBox.warning(self, APP_NAME, "\n".join(errors + ["", *refresh_results]))
+        else:
+            QMessageBox.information(self, APP_NAME, "Web app removed.\n\n" + "\n".join(refresh_results))
+
+    def _build_webapp_item_widget(self, config: WebAppConfig) -> QWidget:
+        widget = QWidget()
+        widget.setObjectName("WebAppItem")
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(12, 10, 12, 14)
+        layout.setSpacing(12)
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(48, 48)
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon = webapp_icon(config.icon_path)
+        pixmap = icon.pixmap(48, 48)
+        if pixmap.isNull():
+            pixmap = app_icon().pixmap(48, 48)
+        icon_label.setPixmap(pixmap)
+        layout.addWidget(icon_label)
+
+        text_container = QWidget()
+        text_layout = QVBoxLayout(text_container)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
+        title_label = QLabel(config.name or config.desktop_filename)
+        title_label.setStyleSheet("font-weight: 600;")
+        title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        text_layout.addWidget(title_label)
+
+        detail_label = QLabel(config.url or config.desktop_path)
+        detail_color = detail_label.palette().color(QPalette.WindowText)
+        detail_color.setAlpha(180)
+        detail_label.setStyleSheet(
+            "color: rgba(%d, %d, %d, %d);" % (
+                detail_color.red(),
+                detail_color.green(),
+                detail_color.blue(),
+                detail_color.alpha(),
+            )
+        )
+        detail_label.setWordWrap(True)
+        detail_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        text_layout.addWidget(detail_label)
+
+        layout.addWidget(text_container, stretch=1)
+
+        if self._is_user_webapp(Path(config.desktop_path)):
+            edit_button = QPushButton("Edit")
+            edit_button.clicked.connect(lambda *_args, p=config.desktop_path: self.open_webapp_by_path(p))
+            layout.addWidget(edit_button)
+
+            uninstall_button = QPushButton("Uninstall")
+            uninstall_button.clicked.connect(lambda *_args, p=config.desktop_path: self.uninstall_webapp_by_path(p))
+            layout.addWidget(uninstall_button)
+
+        return widget
+
+    def _show_webapp_context_menu(self, pos) -> None:
+        item = self.webapps_list.itemAt(pos)
+        if item is None:
+            return
+
+        menu = QMenu(self)
+        open_action = menu.addAction("Open")
+        desktop_path = Path(str(item.data(Qt.UserRole) or ""))
+        uninstall_action = menu.addAction("Uninstall") if self._is_user_webapp(desktop_path) else None
+        action = menu.exec(self.webapps_list.mapToGlobal(pos))
+        if action == open_action:
+            self.open_webapp_list_item(item)
+        elif action == uninstall_action:
+            self.uninstall_webapp(item)
+
+    def uninstall_webapp_by_path(self, path: str) -> None:
+        for index in range(self.webapps_list.count()):
+            item = self.webapps_list.item(index)
+            if item and item.data(Qt.UserRole) == path:
+                self.uninstall_webapp(item)
+                return
+
+    def open_webapp_by_path(self, path: str) -> None:
+        for index in range(self.webapps_list.count()):
+            item = self.webapps_list.item(index)
+            if item and item.data(Qt.UserRole) == path:
+                self.open_webapp_list_item(item)
+                return
+
+    def _is_managed_icon_path(self, path: Path) -> bool:
+        try:
+            return path.resolve().is_relative_to(ICON_DIR.resolve())
+        except AttributeError:
+            try:
+                path.resolve().relative_to(ICON_DIR.resolve())
+                return True
+            except ValueError:
+                return False
+        except OSError:
+            return False
+
+    def _is_user_webapp(self, path: Path) -> bool:
+        try:
+            return path.resolve().is_relative_to(USER_APPLICATIONS_DIR.resolve())
+        except AttributeError:
+            try:
+                path.resolve().relative_to(USER_APPLICATIONS_DIR.resolve())
+                return True
+            except ValueError:
+                return False
+        except OSError:
+            return False
 
     def mark_dirty(self, *_args) -> None:
         self._dirty = True
