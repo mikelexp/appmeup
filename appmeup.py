@@ -280,7 +280,7 @@ def parse_bool(value: str | None, default: bool = False) -> bool:
 class IconLinkParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
-        self.links: list[str] = []
+        self.links: list[tuple[str, str, tuple[tuple[int, int], ...]]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag.lower() != "link":
@@ -291,7 +291,41 @@ class IconLinkParser(HTMLParser):
         if not href:
             return
         if "icon" in rel or "apple-touch-icon" in rel or "mask-icon" in rel:
-            self.links.append(href)
+            self.links.append((href, rel, parse_icon_sizes(data.get("sizes", ""))))
+
+
+def parse_icon_sizes(value: str) -> tuple[tuple[int, int], ...]:
+    sizes: list[tuple[int, int]] = []
+    for token in value.split():
+        if token.lower() == "any":
+            continue
+        match = re.fullmatch(r"(\d+)x(\d+)", token)
+        if not match:
+            continue
+        width = int(match.group(1))
+        height = int(match.group(2))
+        if width > 0 and height > 0:
+            sizes.append((width, height))
+    return tuple(sizes)
+
+
+def score_icon_candidate(
+    pixmap: QPixmap,
+    rel: str,
+    declared_sizes: tuple[tuple[int, int], ...],
+    order: int,
+) -> tuple[int, int, int, int, int]:
+    width = pixmap.width()
+    height = pixmap.height()
+    actual_size = max(width, height)
+    actual_area = width * height
+    declared_size = max((max(width, height) for width, height in declared_sizes), default=0)
+    rel_bonus = 2
+    if "apple-touch-icon" in rel:
+        rel_bonus = 1
+    elif "mask-icon" in rel:
+        rel_bonus = 0
+    return (actual_size, declared_size, actual_area, rel_bonus, -order)
 
 
 def fetch_url(url: str, ignore_ssl_errors: bool = False) -> bytes:
@@ -319,7 +353,7 @@ def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False
     parser.feed(html_bytes.decode("utf-8", errors="ignore"))
 
     candidates: list[str] = []
-    for href in parser.links:
+    for href, _rel, _sizes in parser.links:
         candidate = urljoin(page_url, href)
         if candidate not in candidates:
             candidates.append(candidate)
@@ -331,7 +365,10 @@ def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False
     target = ICON_DIR / f"{slug}.png"
 
     errors: list[str] = []
-    for candidate in candidates:
+    best_pixmap: QPixmap | None = None
+    best_score: tuple[int, int, int, int, int] | None = None
+    best_candidate = ""
+    for order, candidate in enumerate(candidates):
         try:
             image_data = fetch_url(candidate, ignore_ssl_errors=ignore_ssl_errors)
             pixmap = QPixmap()
@@ -341,12 +378,25 @@ def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False
             if pixmap.isNull():
                 errors.append(f"{candidate}: empty image")
                 continue
-            if not pixmap.save(str(target), "PNG"):
-                errors.append(f"{candidate}: could not save PNG")
-                continue
-            return target
+            rel = ""
+            declared_sizes: tuple[tuple[int, int], ...] = ()
+            for href, link_rel, sizes in parser.links:
+                if urljoin(page_url, href) == candidate:
+                    rel = link_rel
+                    declared_sizes = sizes
+                    break
+            score = score_icon_candidate(pixmap, rel, declared_sizes, order)
+            if best_score is None or score > best_score:
+                best_score = score
+                best_pixmap = pixmap
+                best_candidate = candidate
         except (OSError, URLError, ValueError) as exc:
             errors.append(f"{candidate}: {exc}")
+
+    if best_pixmap is not None and best_pixmap.save(str(target), "PNG"):
+        return target
+    if best_candidate:
+        errors.append(f"{best_candidate}: could not save PNG")
 
     detail = "\n".join(errors[-5:])
     raise RuntimeError(f"Could not fetch a valid icon.\n{detail}")

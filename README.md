@@ -5,9 +5,10 @@ Desktop app for creating and editing Chromium-based web apps from `.desktop` lau
 ## Features
 
 - Create user-level web app launchers in `~/.local/share/applications`
-- Edit existing Chromium web apps
+- Show AppMeUp-created web apps in the installed list
+- Edit or uninstall installed AppMeUp web apps from the GUI
 - Fetch site icons automatically when possible
-- Refresh the desktop app menu after changes
+- Refresh the desktop app menu and icon cache after changes
 
 ## Screenshots
 
