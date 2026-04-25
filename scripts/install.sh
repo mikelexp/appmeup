@@ -10,6 +10,7 @@ APP_BIN_NAME="appmeup"
 INSTALL_BIN="${HOME}/.local/bin"
 INSTALL_LIB="${HOME}/.local/lib/${APP_ID}"
 INSTALL_APPS="${HOME}/.local/share/applications"
+INSTALL_ICON_THEME="${HOME}/.local/share/icons/hicolor"
 INSTALL_ICONS="${HOME}/.local/share/icons/hicolor/512x512/apps"
 
 STANDALONE_DIR="${DIST_DIR}/appmeup.dist"
@@ -27,7 +28,7 @@ else
     exit 1
 fi
 
-echo "Installing App Me Up (${MODE})..."
+echo "Installing AppMeUp! (${MODE})..."
 
 mkdir -p "${INSTALL_BIN}" "${INSTALL_APPS}" "${INSTALL_ICONS}"
 
@@ -42,12 +43,17 @@ fi
 
 install -m 644 "${ROOT_DIR}/icon.png" "${INSTALL_ICONS}/${APP_ID}.png"
 
+# Refresh the icon theme cache so the new app icon is picked up immediately.
+if command -v gtk-update-icon-cache &>/dev/null; then
+    gtk-update-icon-cache -f -t "${INSTALL_ICON_THEME}"
+fi
+
 # Write .desktop entry for the app itself
 cat > "${INSTALL_APPS}/${APP_ID}.desktop" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=App Me Up
+Name=AppMeUp!
 Comment=Create and edit Chromium web apps from .desktop files
 Exec=${INSTALL_BIN}/${APP_BIN_NAME}
 Icon=${APP_ID}
