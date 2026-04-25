@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import xml.etree.ElementTree as ET
 import os
 import re
 import shlex
@@ -17,6 +18,10 @@ from typing import Iterable
 from urllib.error import URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
+
+from xdg.BaseDirectory import xdg_config_dirs, xdg_data_dirs
+from xdg.Exceptions import ParsingError
+from xdg.Menu import parse as parse_xdg_menu
 
 from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QPalette, QPixmap
@@ -50,16 +55,11 @@ from PySide6.QtWidgets import (
 APP_ID = "mikelexp.appmeup"
 APP_NAME = "AppMeUp!"
 USER_APPLICATIONS_DIR = Path.home() / ".local/share/applications"
-DESKTOP_APPLICATION_DIRS = [
-    USER_APPLICATIONS_DIR,
-    Path("/usr/local/share/applications"),
-    Path("/usr/share/applications"),
-]
+DESKTOP_APPLICATION_DIRS = [Path(directory) / "applications" for directory in xdg_data_dirs]
 ICON_DIR = Path.home() / ".local/share/icons/appmeup"
 ICON_THEME_DIR = Path.home() / ".local/share/icons/hicolor"
 PROFILE_DIR = Path.home() / ".local/share/appmeup/profiles"
 DEFAULT_CATEGORIES = ""
-DEFAULT_CATEGORY_CHOICES = ["AudioVideo", "Development", "Education", "Game", "Graphics", "Network", "Office", "Settings", "System", "Utility", "WebBrowser"]
 WEBAPP_MARKER_KEY = "X-AppMeUp-WebApp"
 WEBAPP_VERSION_KEY = "X-AppMeUp-Version"
 ICON_SSL_IGNORE_KEY = "X-AppMeUp-IgnoreIconSSLErrors"
@@ -198,29 +198,108 @@ def reveal_in_file_manager(path: Path) -> None:
     raise RuntimeError("Could not open the target folder in the file manager.")
 
 
+def _collect_categories_from_expr(node: ET.Element, target: set[str], negate: bool = False) -> None:
+    if node.tag == "Not":
+        for child in list(node):
+            _collect_categories_from_expr(child, target, True)
+        return
+    if node.tag == "Category":
+        if not negate and node.text:
+            cleaned = node.text.strip()
+            if cleaned:
+                target.add(cleaned)
+        return
+    for child in list(node):
+        _collect_categories_from_expr(child, target, negate)
+
+
+def _menu_categories(menu: ET.Element) -> set[str]:
+    categories: set[str] = set()
+    for include in menu.findall("Include"):
+        _collect_categories_from_expr(include, categories)
+    return categories
+
+
+def _menu_child_names(menu: ET.Element) -> set[str]:
+    names: set[str] = set()
+    for child_menu in menu.findall("Menu"):
+        name = child_menu.findtext("Name", default="").strip()
+        if name:
+            names.add(name)
+    return names
+
+
+def _menu_name_variants(name: str) -> set[str]:
+    lowered = name.strip().lower()
+    variants = {lowered}
+    if lowered.endswith("ities") and len(lowered) > 5:
+        variants.add(f"{lowered[:-5]}ity")
+    if lowered.endswith("ies") and len(lowered) > 3:
+        variants.add(f"{lowered[:-3]}y")
+    if lowered.endswith("s") and len(lowered) > 1 and not lowered.endswith("ss"):
+        variants.add(lowered[:-1])
+    return variants
+
+
+def _preferred_category(menu_name: str, counts: dict[str, int]) -> str | None:
+    variants = _menu_name_variants(menu_name)
+    matches = [category for category in counts if category.lower() in variants]
+    if matches:
+        return max(matches, key=lambda category: (counts[category], -len(category), category.lower()))
+    if counts:
+        return max(counts, key=lambda category: (counts[category], -len(category), category.lower()))
+    return None
+
+
+def _collect_menu_file_categories(menu_file: Path) -> list[str]:
+    try:
+        tree = ET.parse(menu_file)
+    except (OSError, ET.ParseError):
+        return []
+
+    root = tree.getroot()
+    result: set[str] = set()
+
+    for top_menu in root.findall("Menu"):
+        counts: dict[str, int] = {}
+        for include in top_menu.iter("Include"):
+            categories: set[str] = set()
+            _collect_categories_from_expr(include, categories)
+            for category in categories:
+                counts[category] = counts.get(category, 0) + 1
+
+        preferred = _preferred_category(top_menu.findtext("Name", default="").strip(), counts)
+        direct_categories = _menu_categories(top_menu)
+        child_names = _menu_child_names(top_menu)
+
+        filtered_direct = [
+            category
+            for category in direct_categories
+            if category not in child_names and not category.startswith("X-") and category not in {"Core", "More"}
+        ]
+
+        if preferred:
+            result.add(preferred)
+            if len(filtered_direct) <= 3:
+                for category in filtered_direct:
+                    if category != "Settings" or preferred == "Settings":
+                        result.add(category)
+        else:
+            for category in filtered_direct:
+                result.add(category)
+
+    return sorted(result, key=str.lower)
+
+
 def collect_existing_categories() -> list[str]:
-    categories = set(DEFAULT_CATEGORY_CHOICES)
-
-    for directory in DESKTOP_APPLICATION_DIRS:
-        if not directory.exists():
-            continue
-        for desktop_file in directory.glob("*.desktop"):
-            parser = configparser.ConfigParser(interpolation=None)
-            try:
-                with desktop_file.open("r", encoding="utf-8") as handle:
-                    parser.read_file(handle)
-            except (OSError, configparser.Error, UnicodeDecodeError):
-                continue
-
-            if "Desktop Entry" not in parser:
-                continue
-            value = parser["Desktop Entry"].get("Categories", "")
-            for category in value.split(";"):
-                cleaned = category.strip()
-                if cleaned:
-                    categories.add(cleaned)
-
-    return sorted(categories, key=str.lower)
+    try:
+        menu = parse_xdg_menu()
+    except ParsingError:
+        return []
+    menu_file = getattr(menu, "filename", "")
+    if not menu_file:
+        return []
+    return _collect_menu_file_categories(Path(menu_file))
 
 
 def parse_categories(value: str) -> list[str]:

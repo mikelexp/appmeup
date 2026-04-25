@@ -10,6 +10,7 @@ Desktop app for creating and editing Chromium-based web apps from `.desktop` lau
 - Use `New WebApp` and `Save WebApp` actions in the app UI
 - Fetch site icons automatically when possible
 - Refresh the desktop app menu and icon cache after changes
+- Read XDG menu locations through `pyxdg` so category discovery follows the active DE
 
 ## Screenshots
 
@@ -24,10 +25,10 @@ Desktop app for creating and editing Chromium-based web apps from `.desktop` lau
 ## Run
 
 ```bash
-python3 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python3 appmeup.py
+python appmeup.py
 ```
 
 ## Build
