@@ -886,17 +886,12 @@ class MainWindow(QMainWindow):
 
         file_menu = self.menuBar().addMenu("File")
 
-        new_action = QAction("New", self)
+        new_action = QAction("New WebApp", self)
         new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self.new_config)
         file_menu.addAction(new_action)
 
-        open_action = QAction("Open .desktop…", self)
-        open_action.setShortcut("Ctrl+O")
-        open_action.triggered.connect(self.open_desktop_dialog)
-        file_menu.addAction(open_action)
-
-        save_action = QAction("Save", self)
+        save_action = QAction("Save WebApp", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_desktop)
         file_menu.addAction(save_action)
@@ -917,7 +912,11 @@ class MainWindow(QMainWindow):
         self.target_path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         actions_layout.addWidget(self.target_path_label, stretch=1)
 
-        self.save_button = QPushButton("Save .desktop")
+        self.new_button = QPushButton("New WebApp")
+        self.new_button.clicked.connect(self.new_config)
+        actions_layout.addWidget(self.new_button)
+
+        self.save_button = QPushButton("Save WebApp")
         self.save_button.clicked.connect(self.save_desktop)
         actions_layout.addWidget(self.save_button)
         outer_layout.addLayout(actions_layout)
@@ -1776,14 +1775,6 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
-    def open_desktop_dialog(self, *_args) -> None:
-        if not self._confirm_discard():
-            return
-        start_dir = str(USER_APPLICATIONS_DIR if USER_APPLICATIONS_DIR.exists() else Path.home())
-        path, _ = QFileDialog.getOpenFileName(self, "Open .desktop", start_dir, "Desktop files (*.desktop)")
-        if path:
-            self.open_desktop(Path(path))
-
     def open_desktop(self, path: Path) -> bool:
         try:
             config = load_desktop_file(path)
@@ -1879,16 +1870,11 @@ class MainWindow(QMainWindow):
 def main() -> int:
     QApplication.setApplicationName(APP_NAME)
     QApplication.setDesktopFileName(APP_ID)
-    app = QApplication(sys.argv)
+    app = QApplication([])
     icon = app_icon()
     if not icon.isNull():
         app.setWindowIcon(icon)
     window = MainWindow()
-
-    if len(sys.argv) > 1:
-        candidate = Path(sys.argv[1]).expanduser()
-        if candidate.exists():
-            window.open_desktop(candidate)
 
     window.show()
     return app.exec()

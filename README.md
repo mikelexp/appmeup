@@ -7,6 +7,7 @@ Desktop app for creating and editing Chromium-based web apps from `.desktop` lau
 - Create user-level web app launchers in `~/.local/share/applications`
 - Show AppMeUp-created web apps in the installed list
 - Edit or uninstall installed AppMeUp web apps from the GUI
+- Use `New WebApp` and `Save WebApp` actions in the app UI
 - Fetch site icons automatically when possible
 - Refresh the desktop app menu and icon cache after changes
 
@@ -27,12 +28,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 appmeup.py
-```
-
-Open an existing launcher:
-
-```bash
-python3 appmeup.py ~/.local/share/applications/example.desktop
 ```
 
 ## Build
