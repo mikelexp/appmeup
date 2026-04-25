@@ -329,6 +329,33 @@ def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False
     raise RuntimeError(f"Could not fetch a valid icon.\n{detail}")
 
 
+def local_icon_target(slug: str) -> Path:
+    return ICON_DIR / f"{slug}.png"
+
+
+def icon_slug_for_desktop_filename(filename: str) -> str:
+    return slugify(Path(filename.strip() or "webapp.desktop").stem)
+
+
+def store_icon_file(source_path: str, slug: str) -> Path:
+    source = Path(source_path).expanduser()
+    if not source.exists():
+        raise ValueError(f"Icon file does not exist: {source}")
+
+    pixmap = QPixmap(str(source))
+    if pixmap.isNull():
+        icon = QIcon(str(source))
+        pixmap = icon.pixmap(256, 256)
+    if pixmap.isNull():
+        raise ValueError(f"Unsupported icon format: {source}")
+
+    ICON_DIR.mkdir(parents=True, exist_ok=True)
+    target = local_icon_target(slug)
+    if not pixmap.save(str(target), "PNG"):
+        raise RuntimeError(f"Could not save the icon to {target}")
+    return target
+
+
 @dataclass
 class WebAppConfig:
     name: str = ""
@@ -1455,8 +1482,16 @@ class MainWindow(QMainWindow):
             "Images (*.png *.svg *.ico *.jpg *.jpeg *.webp)",
         )
         if path:
-            self.icon_input.setText(path)
+            filename = self.filename_input.text().strip() or f"{slugify(self.name_input.text())}.desktop"
+            slug = icon_slug_for_desktop_filename(filename)
+            try:
+                icon_path = store_icon_file(path, slug)
+            except Exception as exc:
+                QMessageBox.warning(self, APP_NAME, str(exc))
+                return
+            self.icon_input.setText(str(icon_path))
             self.mark_dirty()
+            self.statusBar().showMessage(f"Icon saved to {icon_path}")
 
     def choose_user_data_dir(self, *_args) -> None:
         path = QFileDialog.getExistingDirectory(self, "Choose user-data-dir", str(Path.home()))
@@ -1470,7 +1505,8 @@ class MainWindow(QMainWindow):
             if not silent:
                 QMessageBox.warning(self, APP_NAME, "Enter a URL before fetching the icon.")
             return
-        slug = slugify(self.filename_input.text().replace(".desktop", "") or self.name_input.text() or urlparse(url).netloc)
+        filename = self.filename_input.text().strip() or f"{slugify(self.name_input.text())}.desktop"
+        slug = icon_slug_for_desktop_filename(filename)
         self.statusBar().showMessage("Downloading icon...")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -1532,6 +1568,15 @@ class MainWindow(QMainWindow):
         if not config.icon_path:
             self.fetch_icon(silent=True)
             config = self.gather_config()
+        elif Path(config.icon_path).expanduser().parent != ICON_DIR:
+            slug = icon_slug_for_desktop_filename(config.desktop_filename)
+            try:
+                icon_path = store_icon_file(config.icon_path, slug)
+            except Exception as exc:
+                QMessageBox.warning(self, APP_NAME, str(exc))
+                return
+            self.icon_input.setText(str(icon_path))
+            config.icon_path = str(icon_path)
 
         try:
             entry = config.to_desktop_entry()
