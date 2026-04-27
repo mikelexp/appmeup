@@ -17,6 +17,8 @@ BUILD_DIR = PROJECT_ROOT / "build"
 DIST_DIR = PROJECT_ROOT / "dist"
 
 def build_command(onefile: bool) -> list[str]:
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from appmeup import APP_VERSION
     command = [
         sys.executable,
         "-m",
@@ -35,8 +37,8 @@ def build_command(onefile: bool) -> list[str]:
         "--company-name=Mikele",
         "--product-name=App Me Up",
         "--file-description=Create and edit Chromium web apps from .desktop files",
-        "--file-version=1.0.0",
-        "--product-version=1.0.0",
+        f"--file-version={APP_VERSION}.0",
+        f"--product-version={APP_VERSION}.0",
         "--nofollow-import-to=tkinter,test,unittest,pydoc",
         f"--include-data-files={ICON_FILE}=icon.png",
         str(MAIN_SCRIPT),

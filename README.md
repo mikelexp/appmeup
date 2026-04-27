@@ -1,6 +1,6 @@
 # AppMeUp!
 
-Desktop app for creating and editing Chromium-based web apps from `.desktop` launchers.
+A desktop app for creating and editing Chromium-based web apps in Linux.
 
 ## Features
 
@@ -11,6 +11,7 @@ Desktop app for creating and editing Chromium-based web apps from `.desktop` lau
 - Fetch site icons automatically when possible
 - Refresh the desktop app menu and icon cache after changes
 - Read XDG menu locations through `pyxdg` so category discovery follows the active DE
+- Filter Chromium parameters by name or description in the options tab
 
 ## Screenshots
 
@@ -21,6 +22,10 @@ Desktop app for creating and editing Chromium-based web apps from `.desktop` lau
 ![](screenshots/Screenshot_20260423_132317.png) 
 ![](screenshots/Screenshot_20260423_132336.png) 
 ![](screenshots/Screenshot_20260423_132410.png) 
+
+## Requirements
+
+- Python 3.13
 
 ## Run
 

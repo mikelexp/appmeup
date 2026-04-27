@@ -23,13 +23,15 @@ from xdg.BaseDirectory import xdg_config_dirs, xdg_data_dirs
 from xdg.Exceptions import ParsingError
 from xdg.Menu import parse as parse_xdg_menu
 
-from PySide6.QtCore import QSignalBlocker, Qt
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QPalette, QPixmap
+from PySide6.QtCore import QSignalBlocker, Qt, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QGridLayout,
@@ -54,6 +56,8 @@ from PySide6.QtWidgets import (
 
 APP_ID = "mikelexp.appmeup"
 APP_NAME = "AppMeUp!"
+APP_VERSION = "1.0"
+APP_DESCRIPTION = "A desktop app for creating and editing Chromium-based web apps in Linux."
 USER_APPLICATIONS_DIR = Path.home() / ".local/share/applications"
 DESKTOP_APPLICATION_DIRS = [Path(directory) / "applications" for directory in xdg_data_dirs]
 ICON_DIR = Path.home() / ".local/share/icons/appmeup"
@@ -1077,6 +1081,8 @@ class MainWindow(QMainWindow):
         self._dirty = False
         self._filename_auto_sync = True
         self.current_config = WebAppConfig()
+        self._chromium_rows: list[dict] = []
+        self._chromium_groups: list[QGroupBox] = []
 
         self._build_ui()
         self.load_config(self.current_config)
@@ -1097,6 +1103,14 @@ class MainWindow(QMainWindow):
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_desktop)
         file_menu.addAction(save_action)
+
+        help_menu = self.menuBar().addMenu("Help")
+        website_action = QAction("Go to the app's website", self)
+        website_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/mikelexp/appmeup")))
+        help_menu.addAction(website_action)
+        about_action = QAction("About AppMeUp!", self)
+        about_action.triggered.connect(self._show_about_dialog)
+        help_menu.addAction(about_action)
 
         central = QWidget(self)
         outer_layout = QVBoxLayout(central)
@@ -1233,136 +1247,147 @@ class MainWindow(QMainWindow):
 
     def _build_chromium_tab(self) -> QWidget:
         container = QWidget()
+        self._chromium_rows.clear()
+        self._chromium_groups.clear()
+
+        search_layout = QHBoxLayout()
+        self.chromium_search_input = QLineEdit()
+        self.chromium_search_input.setPlaceholderText("Search parameters and tooltips...")
+        self.chromium_search_input.textChanged.connect(self._filter_chromium)
+        search_layout.addWidget(QLabel("Filter:"))
+        search_layout.addWidget(self.chromium_search_input, stretch=1)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
 
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
+        inner_layout.addLayout(search_layout)
 
         app_group = self._chromium_group("App And Window")
         app_grid = app_group.layout()
         self.app_id_input = self._line_edit()
-        self._add_chromium_row(app_grid, 0, "app-id", self.app_id_input)
+        self._add_chromium_row(app_group, app_grid, 0, "app-id", self.app_id_input)
         self.app_launch_url_input = self._line_edit()
-        self._add_chromium_row(app_grid, 1, "app-launch-url-for-shortcuts-menu-item", self.app_launch_url_input)
+        self._add_chromium_row(app_group, app_grid, 1, "app-launch-url-for-shortcuts-menu-item", self.app_launch_url_input)
         self.wm_class_input = self._line_edit()
-        self._add_chromium_row(app_grid, 2, "class", self.wm_class_input)
+        self._add_chromium_row(app_group, app_grid, 2, "class", self.wm_class_input)
         self.guest_check = self._check_box()
-        self._add_chromium_check(app_grid, 3, "guest", self.guest_check)
+        self._add_chromium_check(app_group, app_grid, 3, "guest", self.guest_check)
         self.incognito_check = self._check_box()
-        self._add_chromium_check(app_grid, 4, "incognito", self.incognito_check)
+        self._add_chromium_check(app_group, app_grid, 4, "incognito", self.incognito_check)
         self.kiosk_check = self._check_box()
-        self._add_chromium_check(app_grid, 5, "kiosk", self.kiosk_check)
+        self._add_chromium_check(app_group, app_grid, 5, "kiosk", self.kiosk_check)
         self.wm_name_input = self._line_edit()
-        self._add_chromium_row(app_grid, 6, "name", self.wm_name_input)
+        self._add_chromium_row(app_group, app_grid, 6, "name", self.wm_name_input)
         self.new_window_check = self._check_box()
-        self._add_chromium_check(app_grid, 7, "new-window", self.new_window_check)
+        self._add_chromium_check(app_group, app_grid, 7, "new-window", self.new_window_check)
         self.no_first_run_check = self._check_box()
-        self._add_chromium_check(app_grid, 8, "no-first-run", self.no_first_run_check)
+        self._add_chromium_check(app_group, app_grid, 8, "no-first-run", self.no_first_run_check)
         self.start_fullscreen_check = self._check_box()
-        self._add_chromium_check(app_grid, 9, "start-fullscreen", self.start_fullscreen_check)
+        self._add_chromium_check(app_group, app_grid, 9, "start-fullscreen", self.start_fullscreen_check)
         self.start_maximized_check = self._check_box()
-        self._add_chromium_check(app_grid, 10, "start-maximized", self.start_maximized_check)
+        self._add_chromium_check(app_group, app_grid, 10, "start-maximized", self.start_maximized_check)
         self.window_position_input = self._line_edit("50,50")
-        self._add_chromium_row(app_grid, 11, "window-position", self.window_position_input)
+        self._add_chromium_row(app_group, app_grid, 11, "window-position", self.window_position_input)
         self.window_size_input = self._line_edit("1280,800")
-        self._add_chromium_row(app_grid, 12, "window-size", self.window_size_input)
+        self._add_chromium_row(app_group, app_grid, 12, "window-size", self.window_size_input)
         inner_layout.addWidget(app_group)
 
         identity_group = self._chromium_group("Identity And Profile")
         identity_grid = identity_group.layout()
         self.disable_features_input = self._line_edit()
-        self._add_chromium_row(identity_grid, 0, "disable-features", self.disable_features_input)
+        self._add_chromium_row(identity_group, identity_grid, 0, "disable-features", self.disable_features_input)
         self.enable_features_input = self._line_edit()
-        self._add_chromium_row(identity_grid, 1, "enable-features", self.enable_features_input)
+        self._add_chromium_row(identity_group, identity_grid, 1, "enable-features", self.enable_features_input)
         self.lang_input = self._line_edit("en-US")
-        self._add_chromium_row(identity_grid, 2, "lang", self.lang_input)
+        self._add_chromium_row(identity_group, identity_grid, 2, "lang", self.lang_input)
         self.profile_directory_input = self._line_edit("Default")
-        self._add_chromium_row(identity_grid, 3, "profile-directory", self.profile_directory_input)
+        self._add_chromium_row(identity_group, identity_grid, 3, "profile-directory", self.profile_directory_input)
         self.user_data_dir_input = self._path_row_button("Browse", self.choose_user_data_dir)
-        self._add_chromium_row(identity_grid, 4, "user-data-dir", self.user_data_dir_input["widget"])
+        self._add_chromium_row(identity_group, identity_grid, 4, "user-data-dir", self.user_data_dir_input["widget"])
         self.user_agent_input = self._line_edit()
-        self._add_chromium_row(identity_grid, 5, "user-agent", self.user_agent_input)
+        self._add_chromium_row(identity_group, identity_grid, 5, "user-agent", self.user_agent_input)
         inner_layout.addWidget(identity_group)
 
         rendering_group = self._chromium_group("Rendering And Performance")
         rendering_grid = rendering_group.layout()
         self.autoplay_policy_input = self._line_edit()
-        self._add_chromium_row(rendering_grid, 0, "autoplay-policy", self.autoplay_policy_input)
+        self._add_chromium_row(rendering_group, rendering_grid, 0, "autoplay-policy", self.autoplay_policy_input)
         self.disable_dev_shm_usage_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 1, "disable-dev-shm-usage", self.disable_dev_shm_usage_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 1, "disable-dev-shm-usage", self.disable_dev_shm_usage_check)
         self.disable_extensions_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 2, "disable-extensions", self.disable_extensions_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 2, "disable-extensions", self.disable_extensions_check)
         self.disable_gpu_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 3, "disable-gpu", self.disable_gpu_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 3, "disable-gpu", self.disable_gpu_check)
         self.disable_renderer_backgrounding_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 4, "disable-renderer-backgrounding", self.disable_renderer_backgrounding_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 4, "disable-renderer-backgrounding", self.disable_renderer_backgrounding_check)
         self.disable_software_rasterizer_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 5, "disable-software-rasterizer", self.disable_software_rasterizer_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 5, "disable-software-rasterizer", self.disable_software_rasterizer_check)
         self.disk_cache_dir_input = self._line_edit()
-        self._add_chromium_row(rendering_grid, 6, "disk-cache-dir", self.disk_cache_dir_input)
+        self._add_chromium_row(rendering_group, rendering_grid, 6, "disk-cache-dir", self.disk_cache_dir_input)
         self.disk_cache_size_input = self._line_edit()
-        self._add_chromium_row(rendering_grid, 7, "disk-cache-size", self.disk_cache_size_input)
+        self._add_chromium_row(rendering_group, rendering_grid, 7, "disk-cache-size", self.disk_cache_size_input)
         self.force_device_scale_factor_input = self._line_edit("1.0")
-        self._add_chromium_row(rendering_grid, 8, "force-device-scale-factor", self.force_device_scale_factor_input)
+        self._add_chromium_row(rendering_group, rendering_grid, 8, "force-device-scale-factor", self.force_device_scale_factor_input)
         self.headless_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 9, "headless", self.headless_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 9, "headless", self.headless_check)
         self.mute_audio_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 10, "mute-audio", self.mute_audio_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 10, "mute-audio", self.mute_audio_check)
         self.ozone_platform_hint_input = self._line_edit("auto")
-        self._add_chromium_row(rendering_grid, 11, "ozone-platform-hint", self.ozone_platform_hint_input)
+        self._add_chromium_row(rendering_group, rendering_grid, 11, "ozone-platform-hint", self.ozone_platform_hint_input)
         self.process_per_site_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 12, "process-per-site", self.process_per_site_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 12, "process-per-site", self.process_per_site_check)
         self.single_process_check = self._check_box()
-        self._add_chromium_check(rendering_grid, 13, "single-process", self.single_process_check)
+        self._add_chromium_check(rendering_group, rendering_grid, 13, "single-process", self.single_process_check)
         self.use_gl_input = self._line_edit()
-        self._add_chromium_row(rendering_grid, 14, "use-gl", self.use_gl_input)
+        self._add_chromium_row(rendering_group, rendering_grid, 14, "use-gl", self.use_gl_input)
         self.virtual_time_budget_input = self._line_edit()
-        self._add_chromium_row(rendering_grid, 15, "virtual-time-budget", self.virtual_time_budget_input)
+        self._add_chromium_row(rendering_group, rendering_grid, 15, "virtual-time-budget", self.virtual_time_budget_input)
         inner_layout.addWidget(rendering_group)
 
         network_group = self._chromium_group("Network And Security")
         network_grid = network_group.layout()
         self.allow_insecure_localhost_check = self._check_box()
-        self._add_chromium_check(network_grid, 0, "allow-insecure-localhost", self.allow_insecure_localhost_check)
+        self._add_chromium_check(network_group, network_grid, 0, "allow-insecure-localhost", self.allow_insecure_localhost_check)
         self.disable_background_networking_check = self._check_box()
-        self._add_chromium_check(network_grid, 1, "disable-background-networking", self.disable_background_networking_check)
+        self._add_chromium_check(network_group, network_grid, 1, "disable-background-networking", self.disable_background_networking_check)
         self.disable_notifications_check = self._check_box()
-        self._add_chromium_check(network_grid, 2, "disable-notifications", self.disable_notifications_check)
+        self._add_chromium_check(network_group, network_grid, 2, "disable-notifications", self.disable_notifications_check)
         self.disable_popup_blocking_check = self._check_box()
-        self._add_chromium_check(network_grid, 3, "disable-popup-blocking", self.disable_popup_blocking_check)
+        self._add_chromium_check(network_group, network_grid, 3, "disable-popup-blocking", self.disable_popup_blocking_check)
         self.disable_web_security_check = self._check_box()
-        self._add_chromium_check(network_grid, 4, "disable-web-security", self.disable_web_security_check)
+        self._add_chromium_check(network_group, network_grid, 4, "disable-web-security", self.disable_web_security_check)
         self.host_resolver_rules_input = self._line_edit()
-        self._add_chromium_row(network_grid, 5, "host-resolver-rules", self.host_resolver_rules_input)
+        self._add_chromium_row(network_group, network_grid, 5, "host-resolver-rules", self.host_resolver_rules_input)
         self.ignore_certificate_errors_check = self._check_box()
-        self._add_chromium_check(network_grid, 6, "ignore-certificate-errors", self.ignore_certificate_errors_check)
+        self._add_chromium_check(network_group, network_grid, 6, "ignore-certificate-errors", self.ignore_certificate_errors_check)
         self.no_sandbox_check = self._check_box()
-        self._add_chromium_check(network_grid, 7, "no-sandbox", self.no_sandbox_check)
+        self._add_chromium_check(network_group, network_grid, 7, "no-sandbox", self.no_sandbox_check)
         self.proxy_bypass_input = self._line_edit()
-        self._add_chromium_row(network_grid, 8, "proxy-bypass-list", self.proxy_bypass_input)
+        self._add_chromium_row(network_group, network_grid, 8, "proxy-bypass-list", self.proxy_bypass_input)
         self.proxy_pac_url_input = self._line_edit()
-        self._add_chromium_row(network_grid, 9, "proxy-pac-url", self.proxy_pac_url_input)
+        self._add_chromium_row(network_group, network_grid, 9, "proxy-pac-url", self.proxy_pac_url_input)
         self.proxy_server_input = self._line_edit()
-        self._add_chromium_row(network_grid, 10, "proxy-server", self.proxy_server_input)
+        self._add_chromium_row(network_group, network_grid, 10, "proxy-server", self.proxy_server_input)
         inner_layout.addWidget(network_group)
 
         debug_group = self._chromium_group("Debug And Automation")
         debug_grid = debug_group.layout()
         self.auto_open_devtools_check = self._check_box()
-        self._add_chromium_check(debug_grid, 0, "auto-open-devtools-for-tabs", self.auto_open_devtools_check)
+        self._add_chromium_check(debug_group, debug_grid, 0, "auto-open-devtools-for-tabs", self.auto_open_devtools_check)
         self.enable_logging_check = self._check_box()
-        self._add_chromium_check(debug_grid, 1, "enable-logging", self.enable_logging_check)
+        self._add_chromium_check(debug_group, debug_grid, 1, "enable-logging", self.enable_logging_check)
         self.remote_debugging_port_input = self._line_edit("9222")
-        self._add_chromium_row(debug_grid, 2, "remote-debugging-port", self.remote_debugging_port_input)
+        self._add_chromium_row(debug_group, debug_grid, 2, "remote-debugging-port", self.remote_debugging_port_input)
         self.remote_debugging_pipe_check = self._check_box()
-        self._add_chromium_check(debug_grid, 3, "remote-debugging-pipe", self.remote_debugging_pipe_check)
+        self._add_chromium_check(debug_group, debug_grid, 3, "remote-debugging-pipe", self.remote_debugging_pipe_check)
         self.trace_startup_check = self._check_box()
-        self._add_chromium_check(debug_grid, 4, "trace-startup", self.trace_startup_check)
+        self._add_chromium_check(debug_group, debug_grid, 4, "trace-startup", self.trace_startup_check)
         self.trace_startup_file_input = self._line_edit()
-        self._add_chromium_row(debug_grid, 5, "trace-startup-file", self.trace_startup_file_input)
+        self._add_chromium_row(debug_group, debug_grid, 5, "trace-startup-file", self.trace_startup_file_input)
         self.vmodule_input = self._line_edit()
-        self._add_chromium_row(debug_grid, 6, "vmodule", self.vmodule_input)
+        self._add_chromium_row(debug_group, debug_grid, 6, "vmodule", self.vmodule_input)
         inner_layout.addWidget(debug_group)
 
         extra_group = QGroupBox("Extra Flags")
@@ -1377,15 +1402,43 @@ class MainWindow(QMainWindow):
         scroll.setWidget(inner)
         wrapper_layout = QVBoxLayout(container)
         wrapper_layout.addWidget(scroll)
+        self._filter_chromium("")
         return container
+
+    def _filter_chromium(self, query: str) -> None:
+        if not self._chromium_rows:
+            return
+        query_lower = query.strip().lower()
+        visible_by_group: dict[QGroupBox, bool] = {g: False for g in self._chromium_groups}
+
+        for row in self._chromium_rows:
+            group = row["group"]
+            label_widget = row["label"]
+            widget = row["widget"]
+            tooltip = row["tooltip"]
+
+            if not query_lower:
+                label_widget.setVisible(True)
+                widget.setVisible(True)
+                visible_by_group[group] = True
+            else:
+                matches = query_lower in label_widget.text().lower() or query_lower in tooltip.lower()
+                label_widget.setVisible(matches)
+                widget.setVisible(matches)
+                if matches:
+                    visible_by_group[group] = True
+
+        for group, visible in visible_by_group.items():
+            group.setVisible(visible)
 
     def _chromium_group(self, title: str) -> QGroupBox:
         group = QGroupBox(title)
         layout = QGridLayout(group)
         layout.setColumnStretch(1, 1)
+        self._chromium_groups.append(group)
         return group
 
-    def _add_chromium_row(self, layout: QGridLayout, row: int, label: str, widget: QWidget) -> None:
+    def _add_chromium_row(self, group: QGroupBox, layout: QGridLayout, row: int, label: str, widget: QWidget) -> None:
         label_widget = QLabel(label)
         tooltip = CHROMIUM_SWITCH_TOOLTIPS.get(label, "")
         if tooltip:
@@ -1393,8 +1446,14 @@ class MainWindow(QMainWindow):
             widget.setToolTip(tooltip)
         layout.addWidget(label_widget, row, 0)
         layout.addWidget(widget, row, 1)
+        self._chromium_rows.append({
+            "group": group,
+            "label": label_widget,
+            "widget": widget,
+            "tooltip": tooltip,
+        })
 
-    def _add_chromium_check(self, layout: QGridLayout, row: int, label: str, checkbox: QCheckBox) -> None:
+    def _add_chromium_check(self, group: QGroupBox, layout: QGridLayout, row: int, label: str, checkbox: QCheckBox) -> None:
         label_widget = QLabel(label)
         tooltip = CHROMIUM_SWITCH_TOOLTIPS.get(label, "")
         if tooltip:
@@ -1402,6 +1461,12 @@ class MainWindow(QMainWindow):
             checkbox.setToolTip(tooltip)
         layout.addWidget(label_widget, row, 0)
         layout.addWidget(checkbox, row, 1, alignment=Qt.AlignLeft | Qt.AlignVCenter)
+        self._chromium_rows.append({
+            "group": group,
+            "label": label_widget,
+            "widget": checkbox,
+            "tooltip": tooltip,
+        })
 
     def _path_row_button(self, button_text: str, callback) -> dict[str, QWidget]:
         widget = QWidget()
@@ -1903,6 +1968,40 @@ class MainWindow(QMainWindow):
             QMessageBox.No,
         )
         return answer == QMessageBox.Yes
+
+    def _show_about_dialog(self) -> None:
+        icon_path = Path(__file__).parent / "icon.png"
+        pixmap = QPixmap(str(icon_path)) if icon_path.exists() else QPixmap()
+        icon_label = QLabel()
+        if not pixmap.isNull():
+            icon_label.setPixmap(pixmap.scaledToWidth(64, Qt.SmoothTransformation))
+        icon_label.setAlignment(Qt.AlignCenter)
+
+        name_label = QLabel(f"<b>{APP_NAME}</b>")
+        name_label.setAlignment(Qt.AlignCenter)
+
+        version_label = QLabel(f"Version {APP_VERSION}")
+        version_label.setAlignment(Qt.AlignCenter)
+
+        desc_label = QLabel(APP_DESCRIPTION)
+        desc_label.setAlignment(Qt.AlignCenter)
+        desc_label.setWordWrap(True)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+
+        layout = QVBoxLayout()
+        layout.addWidget(icon_label)
+        layout.addWidget(name_label)
+        layout.addWidget(version_label)
+        layout.addWidget(desc_label)
+        layout.addWidget(button_box)
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"About {APP_NAME}")
+        dialog.setLayout(layout)
+        dialog.setMinimumWidth(300)
+        button_box.accepted.connect(dialog.accept)
+        dialog.exec()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._confirm_discard():
