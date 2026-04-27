@@ -1001,6 +1001,73 @@ def collect_existing_webapps() -> list[WebAppConfig]:
     return sorted(webapps, key=lambda config: (config.name.lower(), config.desktop_filename.lower()))
 
 
+_UI_TEXT_FIELDS: list[tuple[str, str]] = [
+    ("name", "name_input"),
+    ("url", "url_input"),
+    ("comment", "comment_input"),
+    ("categories", "categories_input"),
+    ("icon_path", "icon_input"),
+    ("chromium_path", "chromium_input"),
+    ("desktop_filename", "filename_input"),
+    ("wm_class", "wm_class_input"),
+    ("wm_name", "wm_name_input"),
+    ("app_id", "app_id_input"),
+    ("app_launch_url_for_shortcuts_menu_item", "app_launch_url_input"),
+    ("window_size", "window_size_input"),
+    ("window_position", "window_position_input"),
+    ("proxy_server", "proxy_server_input"),
+    ("proxy_bypass_list", "proxy_bypass_input"),
+    ("user_agent", "user_agent_input"),
+    ("enable_features", "enable_features_input"),
+    ("disable_features", "disable_features_input"),
+    ("lang", "lang_input"),
+    ("profile_directory", "profile_directory_input"),
+    ("remote_debugging_port", "remote_debugging_port_input"),
+    ("vmodule", "vmodule_input"),
+    ("trace_startup_file", "trace_startup_file_input"),
+    ("virtual_time_budget", "virtual_time_budget_input"),
+    ("proxy_pac_url", "proxy_pac_url_input"),
+    ("host_resolver_rules", "host_resolver_rules_input"),
+    ("autoplay_policy", "autoplay_policy_input"),
+    ("use_gl", "use_gl_input"),
+    ("force_device_scale_factor", "force_device_scale_factor_input"),
+    ("ozone_platform_hint", "ozone_platform_hint_input"),
+    ("disk_cache_dir", "disk_cache_dir_input"),
+    ("disk_cache_size", "disk_cache_size_input"),
+]
+
+_UI_CHECKBOX_FIELDS: list[tuple[str, str]] = [
+    ("ignore_icon_ssl_errors", "ignore_icon_ssl_errors_check"),
+    ("new_window", "new_window_check"),
+    ("incognito", "incognito_check"),
+    ("kiosk", "kiosk_check"),
+    ("start_maximized", "start_maximized_check"),
+    ("start_fullscreen", "start_fullscreen_check"),
+    ("ignore_certificate_errors", "ignore_certificate_errors_check"),
+    ("allow_insecure_localhost", "allow_insecure_localhost_check"),
+    ("guest", "guest_check"),
+    ("headless", "headless_check"),
+    ("disable_gpu", "disable_gpu_check"),
+    ("disable_extensions", "disable_extensions_check"),
+    ("no_first_run", "no_first_run_check"),
+    ("auto_open_devtools_for_tabs", "auto_open_devtools_check"),
+    ("disable_dev_shm_usage", "disable_dev_shm_usage_check"),
+    ("remote_debugging_pipe", "remote_debugging_pipe_check"),
+    ("trace_startup", "trace_startup_check"),
+    ("enable_logging", "enable_logging_check"),
+    ("disable_web_security", "disable_web_security_check"),
+    ("no_sandbox", "no_sandbox_check"),
+    ("disable_background_networking", "disable_background_networking_check"),
+    ("disable_notifications", "disable_notifications_check"),
+    ("mute_audio", "mute_audio_check"),
+    ("disable_popup_blocking", "disable_popup_blocking_check"),
+    ("disable_software_rasterizer", "disable_software_rasterizer_check"),
+    ("disable_renderer_backgrounding", "disable_renderer_backgrounding_check"),
+    ("process_per_site", "process_per_site_check"),
+    ("single_process", "single_process_check"),
+]
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -1294,10 +1361,8 @@ class MainWindow(QMainWindow):
         self._add_chromium_check(debug_grid, 4, "trace-startup", self.trace_startup_check)
         self.trace_startup_file_input = self._line_edit()
         self._add_chromium_row(debug_grid, 5, "trace-startup-file", self.trace_startup_file_input)
-        self.virtual_time_budget_input = self._line_edit()
-        self._add_chromium_row(debug_grid, 6, "virtual-time-budget", self.virtual_time_budget_input)
         self.vmodule_input = self._line_edit()
-        self._add_chromium_row(debug_grid, 7, "vmodule", self.vmodule_input)
+        self._add_chromium_row(debug_grid, 6, "vmodule", self.vmodule_input)
         inner_layout.addWidget(debug_group)
 
         extra_group = QGroupBox("Extra Flags")
@@ -1627,142 +1692,50 @@ class MainWindow(QMainWindow):
         self.icon_preview_label.setText("")
         self.icon_preview_label.setPixmap(scaled)
 
+    def _get_widget(self, name: str) -> QWidget:
+        return getattr(self, name)
+
+    def _apply_config_to_ui(self, config: WebAppConfig) -> None:
+        for attr_name, widget_name in _UI_TEXT_FIELDS:
+            widget = self._get_widget(widget_name)
+            value = getattr(config, attr_name, "")
+            if widget_name == "user_data_dir_input":
+                widget["line_edit"].setText(value or default_user_data_dir(config.desktop_filename))
+            elif widget_name == "extra_args_input":
+                widget.setPlainText(value)
+            elif widget_name == "categories_select":
+                widget.setCurrentIndex(0)
+            else:
+                widget.setText(value)
+
+        for attr_name, widget_name in _UI_CHECKBOX_FIELDS:
+            widget = self._get_widget(widget_name)
+            value = getattr(config, attr_name, False)
+            widget.setChecked(value)
+
+    def _collect_ui_to_config(self) -> dict:
+        data: dict[str, str | bool] = {}
+        for attr_name, widget_name in _UI_TEXT_FIELDS:
+            widget = self._get_widget(widget_name)
+            if widget_name == "user_data_dir_input":
+                data[attr_name] = widget["line_edit"].text().strip()
+            elif widget_name == "extra_args_input":
+                data[attr_name] = widget.toPlainText().strip()
+            elif widget_name == "categories_input":
+                data[attr_name] = serialize_categories(parse_categories(widget.text()))
+            else:
+                data[attr_name] = widget.text().strip()
+
+        for attr_name, widget_name in _UI_CHECKBOX_FIELDS:
+            widget = self._get_widget(widget_name)
+            data[attr_name] = widget.isChecked()
+
+        return data
+
     def load_config(self, config: WebAppConfig) -> None:
         self.current_config = config
         self._filename_auto_sync = not bool(config.opened_from_existing)
-        blockers = [
-            QSignalBlocker(self.name_input),
-            QSignalBlocker(self.url_input),
-            QSignalBlocker(self.comment_input),
-            QSignalBlocker(self.categories_select),
-            QSignalBlocker(self.categories_input),
-            QSignalBlocker(self.filename_input),
-            QSignalBlocker(self.chromium_input),
-            QSignalBlocker(self.icon_input),
-            QSignalBlocker(self.ignore_icon_ssl_errors_check),
-            QSignalBlocker(self.user_data_dir_input["line_edit"]),
-            QSignalBlocker(self.wm_class_input),
-            QSignalBlocker(self.wm_name_input),
-            QSignalBlocker(self.app_id_input),
-            QSignalBlocker(self.app_launch_url_input),
-            QSignalBlocker(self.window_size_input),
-            QSignalBlocker(self.window_position_input),
-            QSignalBlocker(self.proxy_server_input),
-            QSignalBlocker(self.proxy_bypass_input),
-            QSignalBlocker(self.user_agent_input),
-            QSignalBlocker(self.enable_features_input),
-            QSignalBlocker(self.disable_features_input),
-            QSignalBlocker(self.lang_input),
-            QSignalBlocker(self.profile_directory_input),
-            QSignalBlocker(self.remote_debugging_port_input),
-            QSignalBlocker(self.vmodule_input),
-            QSignalBlocker(self.trace_startup_file_input),
-            QSignalBlocker(self.virtual_time_budget_input),
-            QSignalBlocker(self.proxy_pac_url_input),
-            QSignalBlocker(self.host_resolver_rules_input),
-            QSignalBlocker(self.autoplay_policy_input),
-            QSignalBlocker(self.use_gl_input),
-            QSignalBlocker(self.force_device_scale_factor_input),
-            QSignalBlocker(self.ozone_platform_hint_input),
-            QSignalBlocker(self.disk_cache_dir_input),
-            QSignalBlocker(self.disk_cache_size_input),
-            QSignalBlocker(self.extra_args_input),
-            QSignalBlocker(self.new_window_check),
-            QSignalBlocker(self.incognito_check),
-            QSignalBlocker(self.kiosk_check),
-            QSignalBlocker(self.start_maximized_check),
-            QSignalBlocker(self.start_fullscreen_check),
-            QSignalBlocker(self.ignore_certificate_errors_check),
-            QSignalBlocker(self.allow_insecure_localhost_check),
-            QSignalBlocker(self.guest_check),
-            QSignalBlocker(self.headless_check),
-            QSignalBlocker(self.disable_gpu_check),
-            QSignalBlocker(self.disable_extensions_check),
-            QSignalBlocker(self.no_first_run_check),
-            QSignalBlocker(self.auto_open_devtools_check),
-            QSignalBlocker(self.disable_dev_shm_usage_check),
-            QSignalBlocker(self.remote_debugging_pipe_check),
-            QSignalBlocker(self.trace_startup_check),
-            QSignalBlocker(self.enable_logging_check),
-            QSignalBlocker(self.disable_web_security_check),
-            QSignalBlocker(self.no_sandbox_check),
-            QSignalBlocker(self.disable_background_networking_check),
-            QSignalBlocker(self.disable_notifications_check),
-            QSignalBlocker(self.mute_audio_check),
-            QSignalBlocker(self.disable_popup_blocking_check),
-            QSignalBlocker(self.disable_software_rasterizer_check),
-            QSignalBlocker(self.disable_renderer_backgrounding_check),
-            QSignalBlocker(self.process_per_site_check),
-            QSignalBlocker(self.single_process_check),
-        ]
-        try:
-            self.name_input.setText(config.name)
-            self.url_input.setText(config.url)
-            self.comment_input.setText(config.comment)
-            self.categories_select.setCurrentIndex(0)
-            self.categories_input.setText(config.categories)
-            self.filename_input.setText(config.desktop_filename)
-            self.chromium_input.setText(config.chromium_path)
-            self.icon_input.setText(config.icon_path)
-            self.ignore_icon_ssl_errors_check.setChecked(config.ignore_icon_ssl_errors)
-            self.user_data_dir_input["line_edit"].setText(
-                config.user_data_dir or default_user_data_dir(config.desktop_filename)
-            )
-            self.wm_class_input.setText(config.wm_class)
-            self.wm_name_input.setText(config.wm_name)
-            self.app_id_input.setText(config.app_id)
-            self.app_launch_url_input.setText(config.app_launch_url_for_shortcuts_menu_item)
-            self.window_size_input.setText(config.window_size)
-            self.window_position_input.setText(config.window_position)
-            self.proxy_server_input.setText(config.proxy_server)
-            self.proxy_bypass_input.setText(config.proxy_bypass_list)
-            self.user_agent_input.setText(config.user_agent)
-            self.enable_features_input.setText(config.enable_features)
-            self.disable_features_input.setText(config.disable_features)
-            self.lang_input.setText(config.lang)
-            self.profile_directory_input.setText(config.profile_directory)
-            self.remote_debugging_port_input.setText(config.remote_debugging_port)
-            self.vmodule_input.setText(config.vmodule)
-            self.trace_startup_file_input.setText(config.trace_startup_file)
-            self.virtual_time_budget_input.setText(config.virtual_time_budget)
-            self.proxy_pac_url_input.setText(config.proxy_pac_url)
-            self.host_resolver_rules_input.setText(config.host_resolver_rules)
-            self.autoplay_policy_input.setText(config.autoplay_policy)
-            self.use_gl_input.setText(config.use_gl)
-            self.force_device_scale_factor_input.setText(config.force_device_scale_factor)
-            self.ozone_platform_hint_input.setText(config.ozone_platform_hint)
-            self.disk_cache_dir_input.setText(config.disk_cache_dir)
-            self.disk_cache_size_input.setText(config.disk_cache_size)
-            self.extra_args_input.setPlainText(config.extra_args)
-            self.new_window_check.setChecked(config.new_window)
-            self.incognito_check.setChecked(config.incognito)
-            self.kiosk_check.setChecked(config.kiosk)
-            self.start_maximized_check.setChecked(config.start_maximized)
-            self.start_fullscreen_check.setChecked(config.start_fullscreen)
-            self.ignore_certificate_errors_check.setChecked(config.ignore_certificate_errors)
-            self.allow_insecure_localhost_check.setChecked(config.allow_insecure_localhost)
-            self.guest_check.setChecked(config.guest)
-            self.headless_check.setChecked(config.headless)
-            self.disable_gpu_check.setChecked(config.disable_gpu)
-            self.disable_extensions_check.setChecked(config.disable_extensions)
-            self.no_first_run_check.setChecked(config.no_first_run)
-            self.auto_open_devtools_check.setChecked(config.auto_open_devtools_for_tabs)
-            self.disable_dev_shm_usage_check.setChecked(config.disable_dev_shm_usage)
-            self.remote_debugging_pipe_check.setChecked(config.remote_debugging_pipe)
-            self.trace_startup_check.setChecked(config.trace_startup)
-            self.enable_logging_check.setChecked(config.enable_logging)
-            self.disable_web_security_check.setChecked(config.disable_web_security)
-            self.no_sandbox_check.setChecked(config.no_sandbox)
-            self.disable_background_networking_check.setChecked(config.disable_background_networking)
-            self.disable_notifications_check.setChecked(config.disable_notifications)
-            self.mute_audio_check.setChecked(config.mute_audio)
-            self.disable_popup_blocking_check.setChecked(config.disable_popup_blocking)
-            self.disable_software_rasterizer_check.setChecked(config.disable_software_rasterizer)
-            self.disable_renderer_backgrounding_check.setChecked(config.disable_renderer_backgrounding)
-            self.process_per_site_check.setChecked(config.process_per_site)
-            self.single_process_check.setChecked(config.single_process)
-        finally:
-            blockers.clear()
+        self._apply_config_to_ui(config)
         self._dirty = False
         self._update_target_label()
         self.update_icon_preview(config.icon_path)
@@ -1773,72 +1746,12 @@ class MainWindow(QMainWindow):
             filename = f"{filename}.desktop"
         desktop_path = str(USER_APPLICATIONS_DIR / filename)
         user_data_dir = self.user_data_dir_input["line_edit"].text().strip() or default_user_data_dir(filename)
-        return WebAppConfig(
-            name=self.name_input.text().strip(),
-            url=self.url_input.text().strip(),
-            comment=self.comment_input.text().strip(),
-            categories=serialize_categories(parse_categories(self.categories_input.text())),
-            icon_path=self.icon_input.text().strip(),
-            chromium_path=self.chromium_input.text().strip(),
-            desktop_filename=filename,
-            desktop_path=desktop_path,
-            user_data_dir=user_data_dir,
-            wm_class=self.wm_class_input.text().strip(),
-            wm_name=self.wm_name_input.text().strip(),
-            app_id=self.app_id_input.text().strip(),
-            app_launch_url_for_shortcuts_menu_item=self.app_launch_url_input.text().strip(),
-            window_size=self.window_size_input.text().strip(),
-            window_position=self.window_position_input.text().strip(),
-            proxy_server=self.proxy_server_input.text().strip(),
-            proxy_bypass_list=self.proxy_bypass_input.text().strip(),
-            user_agent=self.user_agent_input.text().strip(),
-            enable_features=self.enable_features_input.text().strip(),
-            disable_features=self.disable_features_input.text().strip(),
-            lang=self.lang_input.text().strip(),
-            profile_directory=self.profile_directory_input.text().strip(),
-            remote_debugging_port=self.remote_debugging_port_input.text().strip(),
-            vmodule=self.vmodule_input.text().strip(),
-            trace_startup_file=self.trace_startup_file_input.text().strip(),
-            virtual_time_budget=self.virtual_time_budget_input.text().strip(),
-            proxy_pac_url=self.proxy_pac_url_input.text().strip(),
-            host_resolver_rules=self.host_resolver_rules_input.text().strip(),
-            autoplay_policy=self.autoplay_policy_input.text().strip(),
-            use_gl=self.use_gl_input.text().strip(),
-            force_device_scale_factor=self.force_device_scale_factor_input.text().strip(),
-            ozone_platform_hint=self.ozone_platform_hint_input.text().strip(),
-            disk_cache_dir=self.disk_cache_dir_input.text().strip(),
-            disk_cache_size=self.disk_cache_size_input.text().strip(),
-            extra_args=self.extra_args_input.toPlainText().strip(),
-            ignore_icon_ssl_errors=self.ignore_icon_ssl_errors_check.isChecked(),
-            new_window=self.new_window_check.isChecked(),
-            incognito=self.incognito_check.isChecked(),
-            kiosk=self.kiosk_check.isChecked(),
-            start_maximized=self.start_maximized_check.isChecked(),
-            start_fullscreen=self.start_fullscreen_check.isChecked(),
-            ignore_certificate_errors=self.ignore_certificate_errors_check.isChecked(),
-            allow_insecure_localhost=self.allow_insecure_localhost_check.isChecked(),
-            guest=self.guest_check.isChecked(),
-            headless=self.headless_check.isChecked(),
-            disable_gpu=self.disable_gpu_check.isChecked(),
-            disable_extensions=self.disable_extensions_check.isChecked(),
-            no_first_run=self.no_first_run_check.isChecked(),
-            auto_open_devtools_for_tabs=self.auto_open_devtools_check.isChecked(),
-            disable_dev_shm_usage=self.disable_dev_shm_usage_check.isChecked(),
-            remote_debugging_pipe=self.remote_debugging_pipe_check.isChecked(),
-            trace_startup=self.trace_startup_check.isChecked(),
-            enable_logging=self.enable_logging_check.isChecked(),
-            disable_web_security=self.disable_web_security_check.isChecked(),
-            no_sandbox=self.no_sandbox_check.isChecked(),
-            disable_background_networking=self.disable_background_networking_check.isChecked(),
-            disable_notifications=self.disable_notifications_check.isChecked(),
-            mute_audio=self.mute_audio_check.isChecked(),
-            disable_popup_blocking=self.disable_popup_blocking_check.isChecked(),
-            disable_software_rasterizer=self.disable_software_rasterizer_check.isChecked(),
-            disable_renderer_backgrounding=self.disable_renderer_backgrounding_check.isChecked(),
-            process_per_site=self.process_per_site_check.isChecked(),
-            single_process=self.single_process_check.isChecked(),
-            opened_from_existing=bool(self.current_config.opened_from_existing),
-        )
+        data = self._collect_ui_to_config()
+        data["desktop_filename"] = filename
+        data["desktop_path"] = desktop_path
+        data["user_data_dir"] = user_data_dir
+        data["opened_from_existing"] = bool(self.current_config.opened_from_existing)
+        return WebAppConfig(**data)
 
     def new_config(self, *_args) -> None:
         if not self._confirm_discard():

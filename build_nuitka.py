@@ -62,6 +62,7 @@ def clean() -> None:
         PROJECT_ROOT / "appmeup.build",
         PROJECT_ROOT / "appmeup.dist",
         PROJECT_ROOT / "appmeup.onefile-build",
+        PROJECT_ROOT / "appmeup.bin",
     ]
     for target in targets:
         if target.is_dir():
