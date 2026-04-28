@@ -1262,8 +1262,6 @@ class MainWindow(QMainWindow):
 
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
-        inner_layout.addLayout(search_layout)
-
         app_group = self._chromium_group("App And Window")
         app_grid = app_group.layout()
         self.app_id_input = self._line_edit()
@@ -1401,6 +1399,7 @@ class MainWindow(QMainWindow):
 
         scroll.setWidget(inner)
         wrapper_layout = QVBoxLayout(container)
+        wrapper_layout.addLayout(search_layout)
         wrapper_layout.addWidget(scroll)
         self._filter_chromium("")
         return container
