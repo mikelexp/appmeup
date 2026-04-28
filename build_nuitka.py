@@ -18,7 +18,7 @@ DIST_DIR = PROJECT_ROOT / "dist"
 
 def build_command(onefile: bool) -> list[str]:
     sys.path.insert(0, str(PROJECT_ROOT))
-    from appmeup import APP_VERSION
+    from src.constants import APP_VERSION
     command = [
         sys.executable,
         "-m",
