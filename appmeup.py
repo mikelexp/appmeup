@@ -1285,7 +1285,7 @@ class MainWindow(QMainWindow):
         form.addRow("Icon", icon_row)
 
         self.ignore_icon_ssl_errors_check = self._check_box("Ignore SSL certificate errors when fetching icons")
-        form.addRow("Icon SSL", self.ignore_icon_ssl_errors_check)
+        form.addRow("Ignore SSL errors when fetching icon", self.ignore_icon_ssl_errors_check)
 
         self.icon_preview_label = QLabel("No icon")
         self.icon_preview_label.setAlignment(Qt.AlignCenter)
@@ -1591,6 +1591,14 @@ class MainWindow(QMainWindow):
         label = "webapp" if count == 1 else "webapps"
         self.webapps_count_label.setText(f"{count} {label} found")
 
+    def launch_webapp_by_path(self, path: str) -> None:
+        desktop_path = Path(path)
+        if not desktop_path.exists():
+            QMessageBox.warning(self, APP_NAME, f"Desktop file not found:\n{desktop_path}")
+            return
+        subprocess.Popen(['gio', 'launch', str(desktop_path)], start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     def open_webapp_list_item(self, item: QListWidgetItem) -> None:
         if not self._confirm_discard():
             return
@@ -1617,6 +1625,8 @@ class MainWindow(QMainWindow):
         except Exception:
             config = WebAppConfig(desktop_path=str(desktop_path), desktop_filename=desktop_path.name)
 
+        data_dir = Path(config.user_data_dir).expanduser() if config.user_data_dir.strip() else None
+
         message = (
             f"Remove '{config.name or config.desktop_filename}'?\n\n"
             f"This will delete:\n"
@@ -1625,6 +1635,8 @@ class MainWindow(QMainWindow):
         icon_path = Path(config.icon_path).expanduser() if config.icon_path.strip() else None
         if icon_path and icon_path.exists() and self._is_managed_icon_path(icon_path):
             message += f"- {icon_path}\n"
+        if data_dir and data_dir.exists():
+            message += f"- {data_dir}\n"
 
         answer = QMessageBox.question(
             self,
@@ -1649,13 +1661,19 @@ class MainWindow(QMainWindow):
             except OSError as exc:
                 errors.append(f"Could not remove {icon_path}: {exc}")
 
+        if data_dir and data_dir.exists():
+            try:
+                shutil.rmtree(data_dir)
+            except OSError as exc:
+                errors.append(f"Could not remove {data_dir}: {exc}")
+
         refresh_results = run_refresh_commands()
         self.refresh_webapps_list()
 
         if errors:
             QMessageBox.warning(self, APP_NAME, "\n".join(errors + ["", *refresh_results]))
         else:
-            QMessageBox.information(self, APP_NAME, "Web app removed.\n\n" + "\n".join(refresh_results))
+            QMessageBox.information(self, APP_NAME, "Web app removed.\n\nThe application menu and desktop icons have been updated.")
 
     def _build_webapp_item_widget(self, config: WebAppConfig) -> QWidget:
         widget = QWidget()
@@ -1700,6 +1718,10 @@ class MainWindow(QMainWindow):
         text_layout.addWidget(detail_label)
 
         layout.addWidget(text_container, stretch=1)
+
+        open_button = QPushButton("Launch")
+        open_button.clicked.connect(lambda *_args, p=config.desktop_path: self.launch_webapp_by_path(p))
+        layout.addWidget(open_button)
 
         if self._is_user_webapp(Path(config.desktop_path)):
             edit_button = QPushButton("Edit")
@@ -1901,6 +1923,7 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
         self.load_config(WebAppConfig(chromium_path=detect_chromium(), desktop_filename="webapp.desktop"))
+        self.tabs.setCurrentIndex(0)
         self.statusBar().showMessage("Form cleared.")
 
     def detect_chromium_path(self, *_args) -> None:
@@ -1974,6 +1997,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Icon saved to {icon_path}")
         except Exception as exc:
             self.statusBar().showMessage("Could not download the icon.")
+            self.icon_input.setText("")
             if not silent:
                 QMessageBox.warning(self, APP_NAME, str(exc))
         finally:
@@ -2047,7 +2071,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             APP_NAME,
-            "File saved successfully.\n\n" + "\n".join(refresh_results),
+            "Web app saved successfully.\n\nThe application menu and desktop icons have been updated.",
         )
         self.refresh_webapps_list()
         self.statusBar().showMessage(f"Saved: {target}")

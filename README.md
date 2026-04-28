@@ -6,12 +6,14 @@ A desktop app for creating and editing Chromium-based web apps in Linux.
 
 - Create user-level web app launchers in `~/.local/share/applications`
 - Show AppMeUp-created web apps in the installed list
+- Launch installed web apps directly from the GUI
 - Edit or uninstall installed AppMeUp web apps from the GUI
+- Uninstall also cleans up the web app's profile data directory
 - Use `New WebApp` and `Save WebApp` actions in the app UI
-- Fetch site icons automatically when possible
+- Fetch site icons automatically with live preview
 - Refresh the desktop app menu and icon cache after changes
 - Read XDG menu locations through `pyxdg` so category discovery follows the active DE
-- Filter Chromium parameters by name or description in the options tab
+- Filter browser flags by name or description in the options tab; supports Chrome, Chromium, Brave, Vivaldi, and Opera
 
 ## Screenshots
 
