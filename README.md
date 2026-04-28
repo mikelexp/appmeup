@@ -28,27 +28,33 @@ A desktop app for creating and editing Chromium-based web apps in Linux.
 ## Requirements
 
 - Python 3.13
+- GNU Make
 
-## Run
+## Quick Start
 
 ```bash
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python appmeup.py
+make install-deps   # create venv and install dependencies
+make run            # run the app
 ```
 
 ## Build
 
 ```bash
-./scripts/install-build-deps.sh
-./scripts/build-standalone.sh
+make build-standalone   # standalone binary
 # or
-./scripts/build-onefile.sh
+make build-onefile      # onefile binary
 ```
 
 Install a built binary locally:
 
 ```bash
-./scripts/install.sh
+make install
+```
+
+## Other Targets
+
+```bash
+make clean         # remove .venv, build/, dist/
+make clean-build   # remove build artifacts only
+make help          # list all targets
 ```
