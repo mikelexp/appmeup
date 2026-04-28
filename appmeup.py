@@ -70,6 +70,27 @@ WEBAPP_VERSION_KEY = "X-AppMeUp-Version"
 ICON_SSL_IGNORE_KEY = "X-AppMeUp-IgnoreIconSSLErrors"
 ICON_PREVIEW_SIZE = 64
 
+BROWSER_NAME_FROM_BINARY: dict[str, str] = {
+    "google-chrome-stable": "Google Chrome",
+    "google-chrome": "Google Chrome",
+    "chrome": "Google Chrome",
+    "chromium-browser": "Chromium",
+    "chromium": "Chromium",
+    "brave-browser": "Brave",
+    "brave": "Brave",
+    "vivaldi-stable": "Vivaldi",
+    "vivaldi": "Vivaldi",
+    "opera": "Opera",
+}
+
+BROWSER_FLAG_HIDDEN: dict[str, set[str]] = {
+    "Google Chrome": set(),
+    "Chromium": set(),
+    "Brave": {"window-size", "window-position", "app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
+    "Vivaldi": {"window-size", "window-position", "app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
+    "Opera": {"app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
+}
+
 CHROMIUM_SWITCH_TOOLTIPS: dict[str, str] = {
     "app-id": "Fixed app identifier.",
     "app-launch-url-for-shortcuts-menu-item": "URL used when opening shortcuts.",
@@ -166,6 +187,11 @@ def detect_all_chromiums() -> dict[str, str]:
         ("Google Chrome (stable)", "google-chrome-stable"),
         ("Google Chrome", "google-chrome"),
         ("Chrome", "chrome"),
+        ("Brave Browser", "brave-browser"),
+        ("Brave", "brave"),
+        ("Vivaldi", "vivaldi"),
+        ("Vivaldi (stable)", "vivaldi-stable"),
+        ("Opera", "opera"),
     ]
     found: dict[str, str] = {}
     for name, binary in candidates:
@@ -182,6 +208,18 @@ def resolve_executable(path_or_name: str) -> str:
     if os.path.isabs(candidate):
         return candidate if Path(candidate).exists() else ""
     return shutil.which(candidate) or ""
+
+
+def resolve_browser_identity(executable_path: str) -> str:
+    candidate = executable_path.strip()
+    if not candidate:
+        return "Unknown"
+    if not os.path.isabs(candidate):
+        resolved = shutil.which(candidate)
+        if resolved:
+            candidate = resolved
+    binary = Path(candidate).stem.lower()
+    return BROWSER_NAME_FROM_BINARY.get(binary, "Unknown")
 
 
 def current_desktop() -> str:
@@ -405,7 +443,8 @@ def is_probable_webapp(exec_tokens: list[str]) -> bool:
     if not exec_tokens:
         return False
     binary = Path(exec_tokens[0]).name.lower()
-    if "chrome" not in binary and "chromium" not in binary:
+    browser_identifiers = {"chrome", "chromium", "brave", "vivaldi", "opera"}
+    if all(ident not in binary for ident in browser_identifiers):
         return False
     return any(token.startswith("--app=") for token in exec_tokens[1:])
 
@@ -1092,6 +1131,8 @@ class MainWindow(QMainWindow):
         self.current_config = WebAppConfig()
         self._chromium_rows: list[dict] = []
         self._chromium_groups: list[QGroupBox] = []
+        self._current_browser = "Unknown"
+        self._options_tab_index = 1
 
         self._build_ui()
         self.load_config(self.current_config)
@@ -1126,10 +1167,11 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_basic_tab(), "Web App Options")
-        self.tabs.addTab(self._build_chromium_tab(), "Chrome/Chromium Options")
+        self._options_tab_index = self.tabs.addTab(self._build_chromium_tab(), "Browser Options")
         self.webapps_tab = self._build_webapps_tab()
         self.tabs.addTab(self.webapps_tab, "Installed Web Apps")
         self.tabs.currentChanged.connect(self._on_tab_changed)
+        self.tabs.setTabEnabled(self._options_tab_index, False)
         outer_layout.addWidget(self.tabs)
 
         actions_layout = QHBoxLayout()
@@ -1220,11 +1262,12 @@ class MainWindow(QMainWindow):
         chromium_layout.setContentsMargins(0, 0, 0, 0)
         self.chromium_input = QLineEdit()
         self.chromium_input.textEdited.connect(self.mark_dirty)
+        self.chromium_input.textEdited.connect(self._update_browser_ui)
         chromium_layout.addWidget(self.chromium_input)
         chromium_detect_button = QPushButton("Detect")
         chromium_detect_button.clicked.connect(self.detect_chromium_path)
         chromium_layout.addWidget(chromium_detect_button)
-        form.addRow("Chrome/Chromium Executable", chromium_row)
+        form.addRow("Browser Executable", chromium_row)
 
         icon_row = QWidget()
         icon_layout = QHBoxLayout(icon_row)
@@ -1417,6 +1460,7 @@ class MainWindow(QMainWindow):
         if not self._chromium_rows:
             return
         query_lower = query.strip().lower()
+        hidden_flags = BROWSER_FLAG_HIDDEN.get(self._current_browser, set())
         visible_by_group: dict[QGroupBox, bool] = {g: False for g in self._chromium_groups}
 
         for row in self._chromium_rows:
@@ -1424,8 +1468,14 @@ class MainWindow(QMainWindow):
             label_widget = row["label"]
             widget = row["widget"]
             tooltip = row["tooltip"]
+            flag_name = row.get("flag_name", "")
 
-            if not query_lower:
+            browser_hidden = flag_name in hidden_flags
+
+            if browser_hidden:
+                label_widget.setVisible(False)
+                widget.setVisible(False)
+            elif not query_lower:
                 label_widget.setVisible(True)
                 widget.setVisible(True)
                 visible_by_group[group] = True
@@ -1438,6 +1488,24 @@ class MainWindow(QMainWindow):
 
         for group, visible in visible_by_group.items():
             group.setVisible(visible)
+
+    def _update_browser_ui(self, *_args) -> None:
+        path = self.chromium_input.text().strip()
+        if not path:
+            self._current_browser = "Unknown"
+            self.tabs.setTabEnabled(self._options_tab_index, False)
+            self.tabs.setTabText(self._options_tab_index, "Browser Options")
+            if self.tabs.currentIndex() == self._options_tab_index:
+                self.tabs.setCurrentIndex(0)
+        else:
+            browser = resolve_browser_identity(path)
+            if browser == "Unknown":
+                browser = "Chromium"
+            self._current_browser = browser
+            self.tabs.setTabEnabled(self._options_tab_index, True)
+            self.tabs.setTabText(self._options_tab_index, f"{browser} Options")
+
+        self._filter_chromium(self.chromium_search_input.text())
 
     def _chromium_group(self, title: str) -> QGroupBox:
         group = QGroupBox(title)
@@ -1459,6 +1527,7 @@ class MainWindow(QMainWindow):
             "label": label_widget,
             "widget": widget,
             "tooltip": tooltip,
+            "flag_name": label,
         })
 
     def _add_chromium_check(self, group: QGroupBox, layout: QGridLayout, row: int, label: str, checkbox: QCheckBox) -> None:
@@ -1474,6 +1543,7 @@ class MainWindow(QMainWindow):
             "label": label_widget,
             "widget": checkbox,
             "tooltip": tooltip,
+            "flag_name": label,
         })
 
     def _path_row_button(self, button_text: str, callback) -> dict[str, QWidget]:
@@ -1812,6 +1882,7 @@ class MainWindow(QMainWindow):
         self._dirty = False
         self._update_target_label()
         self.update_icon_preview(config.icon_path)
+        self._update_browser_ui()
 
     def gather_config(self) -> WebAppConfig:
         filename = self.filename_input.text().strip() or f"{slugify(self.name_input.text())}.desktop"
@@ -1835,12 +1906,13 @@ class MainWindow(QMainWindow):
     def detect_chromium_path(self, *_args) -> None:
         found = detect_all_chromiums()
         if not found:
-            QMessageBox.warning(self, APP_NAME, "Could not find Chrome or Chromium in PATH.")
+            QMessageBox.warning(self, APP_NAME, "Could not find a Chromium-based browser in PATH.")
             return
         if len(found) == 1:
             path = next(iter(found.values()))
             self.chromium_input.setText(path)
             self.mark_dirty()
+            self._update_browser_ui()
             self.statusBar().showMessage(f"Detected: {path}")
             return
         items = [f"{name}  ({path})" for name, path in found.items()]
@@ -1853,6 +1925,7 @@ class MainWindow(QMainWindow):
             path = item.split("  (", 1)[1].rstrip(")")
             self.chromium_input.setText(path)
             self.mark_dirty()
+            self._update_browser_ui()
             self.statusBar().showMessage(f"Selected: {path}")
 
     def choose_icon_file(self, *_args) -> None:
