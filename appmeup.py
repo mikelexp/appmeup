@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
@@ -57,7 +58,7 @@ from PySide6.QtWidgets import (
 APP_ID = "mikelexp.appmeup"
 APP_NAME = "AppMeUp!"
 APP_VERSION = "1.0"
-APP_DESCRIPTION = "A desktop app for creating and editing Chromium-based web apps in Linux."
+APP_DESCRIPTION = "A desktop app for creating and editing Chrome/Chromium-based web apps in Linux."
 USER_APPLICATIONS_DIR = Path.home() / ".local/share/applications"
 DESKTOP_APPLICATION_DIRS = [Path(directory) / "applications" for directory in xdg_data_dirs]
 ICON_DIR = Path.home() / ".local/share/icons/appmeup"
@@ -152,18 +153,26 @@ def webapp_icon(icon_name: str) -> QIcon:
 
 
 def detect_chromium() -> str:
-    candidates = [
-        "chromium",
-        "chromium-browser",
-        "google-chrome-stable",
-        "google-chrome",
-        "chrome",
-    ]
-    for candidate in candidates:
-        resolved = shutil.which(candidate)
-        if resolved:
-            return resolved
+    found = detect_all_chromiums()
+    if found:
+        return next(iter(found.values()))
     return ""
+
+
+def detect_all_chromiums() -> dict[str, str]:
+    candidates = [
+        ("Chromium", "chromium"),
+        ("Chromium Browser", "chromium-browser"),
+        ("Google Chrome (stable)", "google-chrome-stable"),
+        ("Google Chrome", "google-chrome"),
+        ("Chrome", "chrome"),
+    ]
+    found: dict[str, str] = {}
+    for name, binary in candidates:
+        resolved = shutil.which(binary)
+        if resolved:
+            found[name] = resolved
+    return found
 
 
 def resolve_executable(path_or_name: str) -> str:
@@ -665,7 +674,7 @@ class WebAppConfig:
     def build_exec_tokens(self) -> list[str]:
         resolved_chromium = resolve_executable(self.chromium_path)
         if not resolved_chromium:
-            raise ValueError("No Chromium executable is configured.")
+            raise ValueError("No Chrome/Chromium executable is configured.")
         if not self.url.strip():
             raise ValueError("The URL is required.")
 
@@ -1117,7 +1126,7 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_basic_tab(), "Web App Options")
-        self.tabs.addTab(self._build_chromium_tab(), "Chromium Options")
+        self.tabs.addTab(self._build_chromium_tab(), "Chrome/Chromium Options")
         self.webapps_tab = self._build_webapps_tab()
         self.tabs.addTab(self.webapps_tab, "Installed Web Apps")
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -1215,7 +1224,7 @@ class MainWindow(QMainWindow):
         chromium_detect_button = QPushButton("Detect")
         chromium_detect_button.clicked.connect(self.detect_chromium_path)
         chromium_layout.addWidget(chromium_detect_button)
-        form.addRow("Chromium Executable", chromium_row)
+        form.addRow("Chrome/Chromium Executable", chromium_row)
 
         icon_row = QWidget()
         icon_layout = QHBoxLayout(icon_row)
@@ -1824,13 +1833,27 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Form cleared.")
 
     def detect_chromium_path(self, *_args) -> None:
-        path = detect_chromium()
-        if path:
+        found = detect_all_chromiums()
+        if not found:
+            QMessageBox.warning(self, APP_NAME, "Could not find Chrome or Chromium in PATH.")
+            return
+        if len(found) == 1:
+            path = next(iter(found.values()))
             self.chromium_input.setText(path)
             self.mark_dirty()
-            self.statusBar().showMessage(f"Detected Chromium: {path}")
-        else:
-            QMessageBox.warning(self, APP_NAME, "Could not find Chromium in PATH.")
+            self.statusBar().showMessage(f"Detected: {path}")
+            return
+        items = [f"{name}  ({path})" for name, path in found.items()]
+        item, ok = QInputDialog.getItem(
+            self, "Select Browser",
+            "Multiple browsers detected. Choose one:",
+            items, 0, False,
+        )
+        if ok and item:
+            path = item.split("  (", 1)[1].rstrip(")")
+            self.chromium_input.setText(path)
+            self.mark_dirty()
+            self.statusBar().showMessage(f"Selected: {path}")
 
     def choose_icon_file(self, *_args) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -1910,10 +1933,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, APP_NAME, "The title is required.")
             return
         if not config.chromium_path:
-            QMessageBox.warning(self, APP_NAME, "Configure the Chromium executable.")
+            QMessageBox.warning(self, APP_NAME, "Configure the Chrome/Chromium executable.")
             return
         if not resolve_executable(config.chromium_path):
-            QMessageBox.warning(self, APP_NAME, "The Chromium executable does not exist.")
+            QMessageBox.warning(self, APP_NAME, "The Chrome/Chromium executable does not exist.")
             return
         if not config.icon_path:
             self.fetch_icon(silent=True)
