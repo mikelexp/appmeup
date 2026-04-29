@@ -1058,7 +1058,7 @@ class MainWindow(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle(f"About {APP_NAME}")
         dialog.setLayout(layout)
-        dialog.setMinimumWidth(300)
+        dialog.setFixedSize(400, 200)
         button_box.accepted.connect(dialog.accept)
         dialog.exec()
 
