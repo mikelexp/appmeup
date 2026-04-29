@@ -17,13 +17,12 @@ A desktop app for creating and editing Chromium-based web apps in Linux.
 
 ## Screenshots
 
-![](screenshots/Screenshot_20260423_132155.png) 
-![](screenshots/Screenshot_20260423_132222.png) 
-![](screenshots/Screenshot_20260423_132239.png) 
-![](screenshots/Screenshot_20260423_132300.png) 
-![](screenshots/Screenshot_20260423_132317.png) 
-![](screenshots/Screenshot_20260423_132336.png) 
-![](screenshots/Screenshot_20260423_132410.png) 
+![](screenshots/1.png) 
+![](screenshots/2.png) 
+![](screenshots/3.png) 
+![](screenshots/4.png) 
+![](screenshots/5.png) 
+![](screenshots/6.png) 
 
 ## Requirements
 
