@@ -21,24 +21,27 @@ ICON_SSL_IGNORE_KEY = "X-AppMeUp-IgnoreIconSSLErrors"
 ICON_PREVIEW_SIZE = 64
 
 BROWSER_NAME_FROM_BINARY: dict[str, str] = {
-    "google-chrome-stable": "Google Chrome",
+    "google-chrome-stable": "Google Chrome (Stable)",
     "google-chrome": "Google Chrome",
-    "chrome": "Google Chrome",
-    "chromium-browser": "Chromium",
+    "chrome": "Chrome",
+    "chromium-browser": "Chromium (Browser)",
     "chromium": "Chromium",
-    "brave-browser": "Brave",
+    "brave-browser": "Brave (Browser)",
     "brave": "Brave",
-    "vivaldi-stable": "Vivaldi",
+    "vivaldi-stable": "Vivaldi Stable",
     "vivaldi": "Vivaldi",
-    "opera": "Opera",
 }
 
 BROWSER_FLAG_HIDDEN: dict[str, set[str]] = {
     "Google Chrome": set(),
+    "Google Chrome (Stable)": set(),
+    "Chrome": set(),
     "Chromium": set(),
+    "Chromium (Browser)": set(),
     "Brave": {"window-size", "window-position", "app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
+    "Brave (Browser)": {"window-size", "window-position", "app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
     "Vivaldi": {"window-size", "window-position", "app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
-    "Opera": {"app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
+    "Vivaldi Stable": {"window-size", "window-position", "app-id", "app-launch-url-for-shortcuts-menu-item", "guest"},
 }
 
 CHROMIUM_SWITCH_TOOLTIPS: dict[str, str] = {

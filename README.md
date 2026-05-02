@@ -13,7 +13,7 @@ A desktop app for creating and editing Chromium-based web apps in Linux.
 - Fetch site icons automatically with live preview
 - Refresh the desktop app menu and icon cache after changes
 - Read XDG menu locations through `pyxdg` so category discovery follows the active DE
-- Filter browser flags by name or description in the options tab; supports Chrome, Chromium, Brave, Vivaldi, and Opera
+- Filter browser flags by name or description in the options tab; supports Chrome, Chromium, Brave, and Vivaldi
 
 ## Screenshots
 

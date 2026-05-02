@@ -18,7 +18,6 @@ def detect_chromium() -> str:
         "brave",
         "vivaldi-stable",
         "vivaldi",
-        "opera",
     ]
     for name in names:
         path = shutil.which(name)
@@ -30,20 +29,17 @@ def detect_chromium() -> str:
 def detect_all_chromiums() -> dict[str, str]:
     found: dict[str, str] = {}
     names = [
-        ("Google Chrome", "google-chrome-stable"),
+        ("Google Chrome (Stable)", "google-chrome-stable"),
         ("Google Chrome", "google-chrome"),
-        ("Google Chrome", "chrome"),
-        ("Chromium", "chromium-browser"),
+        ("Chrome", "chrome"),
+        ("Chromium (Browser)", "chromium-browser"),
         ("Chromium", "chromium"),
-        ("Brave", "brave-browser"),
+        ("Brave (Browser)", "brave-browser"),
         ("Brave", "brave"),
-        ("Vivaldi", "vivaldi-stable"),
+        ("Vivaldi Stable", "vivaldi-stable"),
         ("Vivaldi", "vivaldi"),
-        ("Opera", "opera"),
     ]
     for display_name, binary in names:
-        if display_name in found:
-            continue
         path = shutil.which(binary)
         if path:
             found[display_name] = path
