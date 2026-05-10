@@ -143,7 +143,8 @@ def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False
 
     target = local_icon_target(slug)
     target.parent.mkdir(parents=True, exist_ok=True)
-    qimg.save(str(target), "PNG")
+    if not qimg.save(str(target), "PNG"):
+        raise RuntimeError(f"Failed to save icon to {target}")
     return target
 
 
@@ -169,6 +170,7 @@ def store_icon_file(source_path: str, slug: str) -> Path:
         qimg = QImage(str(source))
         if qimg.isNull():
             raise ValueError(f"Could not decode icon: {source}")
-        qimg.save(str(target), "PNG")
+        if not qimg.save(str(target), "PNG"):
+            raise ValueError(f"Failed to save icon to {target}")
         return target
     raise ValueError(f"Unsupported icon format: {ext}")

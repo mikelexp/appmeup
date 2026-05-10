@@ -48,7 +48,7 @@ from src.constants import (
 )
 from src.utils import default_user_data_dir, slugify
 from src.browser import detect_all_chromiums, detect_chromium, resolve_browser_identity, resolve_executable
-from src.icons import app_icon, fetch_icon_for_url, icon_slug_for_desktop_filename, store_icon_file, webapp_icon
+from src.icons import app_asset_path, app_icon, fetch_icon_for_url, icon_slug_for_desktop_filename, store_icon_file, webapp_icon
 from src.desktop_env import reveal_in_file_manager, run_refresh_commands
 from src.categories import (
     append_category_value,
@@ -73,6 +73,7 @@ class MainWindow(QMainWindow):
         self._chromium_groups: list[QGroupBox] = []
         self._current_browser = "Unknown"
         self._options_tab_index = 1
+        self._fetched_icon_urls: set[str] = set()
 
         self._build_ui()
         self.load_config(self.current_config)
@@ -679,9 +680,13 @@ class MainWindow(QMainWindow):
         if item is None:
             return
 
+        data = item.data(Qt.UserRole)
+        if not data:
+            return
+
         menu = QMenu(self)
         open_action = menu.addAction("Open")
-        desktop_path = Path(str(item.data(Qt.UserRole) or ""))
+        desktop_path = Path(str(data))
         uninstall_action = menu.addAction("Uninstall") if self._is_user_webapp(desktop_path) else None
         action = menu.exec(self.webapps_list.mapToGlobal(pos))
         if action == open_action:
@@ -753,7 +758,9 @@ class MainWindow(QMainWindow):
 
     def _on_url_edit_finished(self) -> None:
         self.mark_dirty()
-        if not self.icon_input.text().strip() and self.url_input.text().strip():
+        url = self.url_input.text().strip()
+        if url and not self.icon_input.text().strip() and url not in self._fetched_icon_urls:
+            self._fetched_icon_urls.add(url)
             self.fetch_icon(silent=True)
 
     def _on_category_selected(self, index: int) -> None:
@@ -840,6 +847,7 @@ class MainWindow(QMainWindow):
     def load_config(self, config: WebAppConfig) -> None:
         self.current_config = config
         self._filename_auto_sync = not bool(config.opened_from_existing)
+        self._fetched_icon_urls.clear()
         self._apply_config_to_ui(config)
         self._dirty = False
         self._update_target_label()
@@ -969,6 +977,9 @@ class MainWindow(QMainWindow):
         if not config.name:
             QMessageBox.warning(self, APP_NAME, "The title is required.")
             return
+        if not config.url.strip():
+            QMessageBox.warning(self, APP_NAME, "The URL is required.")
+            return
         if not config.chromium_path:
             QMessageBox.warning(self, APP_NAME, "Configure the Chrome/Chromium executable.")
             return
@@ -1029,7 +1040,7 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.Yes
 
     def _show_about_dialog(self) -> None:
-        icon_path = Path(__file__).resolve().parent.parent / "icon.png"
+        icon_path = app_asset_path("icon.png")
         pixmap = QPixmap(str(icon_path)) if icon_path.exists() else QPixmap()
         icon_label = QLabel()
         if not pixmap.isNull():

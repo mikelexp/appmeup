@@ -11,8 +11,10 @@ from src.constants import PROFILE_DIR
 
 def slugify(text: str) -> str:
     text = text.strip().lower().replace(" ", "-")
-    text = re.sub(r"[^a-z0-9\-_./]", "", text)
-    return re.sub(r"-+", "-", text).strip("-")
+    text = re.sub(r"[^a-z0-9\-_.]", "", text)
+    text = re.sub(r"\.{2,}", ".", text)
+    text = re.sub(r"-+", "-", text).strip("-.")
+    return text.lstrip(".")
 
 
 def is_probable_webapp(exec_tokens: list[str]) -> bool:
@@ -24,7 +26,8 @@ def shell_join(tokens: Iterable[str]) -> str:
 
 
 def default_user_data_dir(desktop_filename: str) -> str:
-    slug = Path(desktop_filename).stem
+    stem = Path(desktop_filename).stem
+    slug = slugify(stem) or "webapp"
     return str(PROFILE_DIR / slug)
 
 

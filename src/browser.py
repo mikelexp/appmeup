@@ -56,7 +56,10 @@ def resolve_executable(path_or_name: str) -> str:
 
 
 def resolve_browser_identity(executable_path: str) -> str:
-    resolved = Path(executable_path).resolve()
+    try:
+        resolved = Path(executable_path).resolve()
+    except OSError:
+        return "Unknown"
     for binary, name in BROWSER_NAME_FROM_BINARY.items():
         candidate = shutil.which(binary)
         if candidate and Path(candidate).resolve() == resolved:

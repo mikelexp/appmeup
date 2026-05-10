@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -12,6 +13,7 @@ from src.main_window import MainWindow
 
 
 def main() -> int:
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     QApplication.setApplicationName(APP_NAME)
     QApplication.setDesktopFileName(APP_ID)
     app = QApplication([])
