@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
 
         self.webapps_list = QListWidget()
         self.webapps_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.webapps_list.setSpacing(8)
+        self.webapps_list.setSpacing(4)
         self.webapps_list.itemDoubleClicked.connect(self.open_webapp_list_item)
         self.webapps_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.webapps_list.customContextMenuRequested.connect(self._show_webapp_context_menu)
@@ -620,7 +620,7 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         widget.setObjectName("WebAppItem")
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(12, 10, 12, 14)
+        layout.setContentsMargins(12, 5, 12, 8)
         layout.setSpacing(12)
 
         icon_label = QLabel()
