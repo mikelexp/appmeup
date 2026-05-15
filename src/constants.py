@@ -20,7 +20,19 @@ WEBAPP_VERSION_KEY = "X-AppMeUp-Version"
 ICON_SSL_IGNORE_KEY = "X-AppMeUp-IgnoreIconSSLErrors"
 ICON_PREVIEW_SIZE = 64
 
-BROWSER_NAME_FROM_BINARY: dict[str, str] = {
+BROWSER_DETECTION_ORDER: list[str] = [
+    "google-chrome-stable",
+    "google-chrome",
+    "chrome",
+    "chromium-browser",
+    "chromium",
+    "brave-browser",
+    "brave",
+    "vivaldi-stable",
+    "vivaldi",
+]
+
+BROWSER_DISPLAY_NAMES: dict[str, str] = {
     "google-chrome-stable": "Google Chrome (Stable)",
     "google-chrome": "Google Chrome",
     "chrome": "Chrome",
@@ -31,6 +43,8 @@ BROWSER_NAME_FROM_BINARY: dict[str, str] = {
     "vivaldi-stable": "Vivaldi Stable",
     "vivaldi": "Vivaldi",
 }
+
+BROWSER_NAME_FROM_BINARY: dict[str, str] = BROWSER_DISPLAY_NAMES
 
 BROWSER_FLAG_HIDDEN: dict[str, set[str]] = {
     "Google Chrome": set(),

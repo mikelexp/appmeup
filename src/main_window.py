@@ -1,21 +1,20 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
 from pathlib import Path
 
-from PySide6.QtCore import QSignalBlocker, Qt, QUrl
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPalette, QPixmap
+from PySide6.QtCore import QThreadPool, QSignalBlocker, Qt, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -27,8 +26,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPushButton,
     QPlainTextEdit,
+    QPushButton,
     QScrollArea,
     QStatusBar,
     QTabWidget,
@@ -36,6 +35,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.categories import (
+    append_category_value,
+    collect_existing_categories,
+    invalidate_category_cache,
+    parse_categories,
+    serialize_categories,
+)
+from src.config import WebAppConfig, collect_existing_webapps, load_desktop_file
 from src.constants import (
     APP_DESCRIPTION,
     APP_NAME,
@@ -46,18 +53,17 @@ from src.constants import (
     ICON_PREVIEW_SIZE,
     USER_APPLICATIONS_DIR,
 )
-from src.utils import default_user_data_dir, slugify
 from src.browser import detect_all_chromiums, detect_chromium, resolve_browser_identity, resolve_executable
-from src.icons import app_asset_path, app_icon, fetch_icon_for_url, icon_slug_for_desktop_filename, store_icon_file, webapp_icon
 from src.desktop_env import reveal_in_file_manager, run_refresh_commands
-from src.categories import (
-    append_category_value,
-    collect_existing_categories,
-    parse_categories,
-    serialize_categories,
-)
-from src.config import WebAppConfig, collect_existing_webapps, load_desktop_file
+from src.icon_fetcher import IconFetchWorker
+from src.icons import app_asset_path, app_icon, icon_slug_for_desktop_filename, store_icon_file, webapp_icon
+from src.logger import setup_logging
+from src.settings import load_last_browser, restore_window_geometry, save_last_browser, save_window_geometry
+from src.ui import build_basic_tab, build_browser_tab, build_webapp_item_widget, build_webapps_tab
 from src.ui_fields import _UI_TEXT_FIELDS, _UI_CHECKBOX_FIELDS
+from src.utils import default_user_data_dir, slugify, validate_url
+
+logger = setup_logging()
 
 
 class MainWindow(QMainWindow):
@@ -74,11 +80,20 @@ class MainWindow(QMainWindow):
         self._current_browser = "Unknown"
         self._options_tab_index = 1
         self._fetched_icon_urls: set[str] = set()
+        self._icon_fetching = False
 
         self._build_ui()
+        self._restore_geometry()
+        self._connect_signals()
         self.load_config(self.current_config)
         self.refresh_webapps_list()
         self.statusBar().showMessage("Ready.")
+        logger.debug("MainWindow initialized")
+
+    def _restore_geometry(self) -> None:
+        geo = restore_window_geometry()
+        if geo and geo.width() > 0 and geo.height() > 0:
+            self.setGeometry(geo)
 
     def _build_ui(self) -> None:
         self.setStatusBar(QStatusBar(self))
@@ -87,12 +102,10 @@ class MainWindow(QMainWindow):
 
         new_action = QAction("New WebApp", self)
         new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self.new_config)
         file_menu.addAction(new_action)
 
         save_action = QAction("Save WebApp", self)
         save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_desktop)
         file_menu.addAction(save_action)
 
         help_menu = self.menuBar().addMenu("Help")
@@ -107,11 +120,16 @@ class MainWindow(QMainWindow):
         outer_layout = QVBoxLayout(central)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_basic_tab(), "Web App Options")
-        self._options_tab_index = self.tabs.addTab(self._build_chromium_tab(), "Browser Options")
-        self.webapps_tab = self._build_webapps_tab()
+
+        basic_tab, self._basic_widgets = build_basic_tab()
+        self.tabs.addTab(basic_tab, "Web App Options")
+
+        browser_tab, self._browser_widgets, self._chromium_rows, self._chromium_groups = build_browser_tab()
+        self._options_tab_index = self.tabs.addTab(browser_tab, "Browser Options")
+
+        webapps_tab, self.webapps_list, self.webapps_count_label = build_webapps_tab()
+        self.webapps_tab = webapps_tab
         self.tabs.addTab(self.webapps_tab, "Installed Web Apps")
-        self.tabs.currentChanged.connect(self._on_tab_changed)
         self.tabs.setTabEnabled(self._options_tab_index, False)
         outer_layout.addWidget(self.tabs)
 
@@ -121,281 +139,62 @@ class MainWindow(QMainWindow):
         actions_layout.addWidget(self.target_path_label, stretch=1)
 
         self.new_button = QPushButton("New WebApp")
-        self.new_button.clicked.connect(self.new_config)
         actions_layout.addWidget(self.new_button)
 
         self.save_button = QPushButton("Save WebApp")
-        self.save_button.clicked.connect(self.save_desktop)
         actions_layout.addWidget(self.save_button)
         outer_layout.addLayout(actions_layout)
 
         self.setCentralWidget(central)
 
-    def _build_webapps_tab(self) -> QWidget:
-        container = QWidget()
-        layout = QVBoxLayout(container)
+    def _connect_signals(self) -> None:
+        self.findChild(QAction, "").triggered.connect(self.new_config)
+        for action in self.menuBar().actions():
+            if action.text() == "File":
+                for sub in action.menu().actions():
+                    if sub.text() == "New WebApp":
+                        sub.triggered.connect(self.new_config)
+                    elif sub.text() == "Save WebApp":
+                        sub.triggered.connect(self.save_desktop)
 
-        actions_layout = QHBoxLayout()
-        self.webapps_count_label = QLabel()
-        actions_layout.addWidget(self.webapps_count_label, stretch=1)
-        refresh_button = QPushButton("Refresh")
-        refresh_button.clicked.connect(self.refresh_webapps_list)
-        actions_layout.addWidget(refresh_button)
-        layout.addLayout(actions_layout)
+        self._basic_widgets["name_input"].textEdited.connect(self._on_name_changed)
+        self._basic_widgets["url_input"].textEdited.connect(self.mark_dirty)
+        self._basic_widgets["url_input"].editingFinished.connect(self._on_url_edit_finished)
+        self._basic_widgets["comment_input"].textEdited.connect(self.mark_dirty)
+        self._basic_widgets["categories_select"].currentIndexChanged.connect(self._on_category_selected)
+        self._basic_widgets["categories_input"].textEdited.connect(self.mark_dirty)
+        self._basic_widgets["filename_input"].textEdited.connect(self._on_filename_changed)
+        self._basic_widgets["open_folder_button"].clicked.connect(self.open_desktop_folder)
+        self._basic_widgets["chromium_input"].textEdited.connect(self.mark_dirty)
+        self._basic_widgets["chromium_input"].textEdited.connect(self._update_browser_ui)
+        self._basic_widgets["chromium_detect_button"].clicked.connect(self.detect_chromium_path)
+        self._basic_widgets["icon_input"].textEdited.connect(self.mark_dirty)
+        self._basic_widgets["icon_input"].textChanged.connect(self.update_icon_preview)
+        self._basic_widgets["browse_icon_button"].clicked.connect(self.choose_icon_file)
+        self._basic_widgets["fetch_icon_button"].clicked.connect(self.fetch_icon)
+        self._basic_widgets["ignore_icon_ssl_errors_check"].toggled.connect(self.mark_dirty)
 
-        self.webapps_list = QListWidget()
-        self.webapps_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.webapps_list.setSpacing(4)
+        self._browser_widgets["chromium_search_input"].textChanged.connect(self._filter_chromium)
+        for w in self._browser_widgets.values():
+            if isinstance(w, QLineEdit):
+                w.textEdited.connect(self.mark_dirty)
+            elif isinstance(w, QCheckBox):
+                w.toggled.connect(self.mark_dirty)
+            elif isinstance(w, dict) and "line_edit" in w:
+                w["line_edit"].textEdited.connect(self.mark_dirty)
+        self._browser_widgets["extra_args_input"].textChanged.connect(self.mark_dirty)
+
         self.webapps_list.itemDoubleClicked.connect(self.open_webapp_list_item)
-        self.webapps_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.webapps_list.customContextMenuRequested.connect(self._show_webapp_context_menu)
-        layout.addWidget(self.webapps_list)
+        self.webapps_tab.findChild(QPushButton, "").clicked.connect(self.refresh_webapps_list)
+        for btn in self.webapps_tab.findChildren(QPushButton):
+            if btn.text() == "Refresh":
+                btn.clicked.connect(self.refresh_webapps_list)
 
-        return container
+        self.new_button.clicked.connect(self.new_config)
+        self.save_button.clicked.connect(self.save_desktop)
 
-    def _build_basic_tab(self) -> QWidget:
-        container = QWidget()
-        layout = QVBoxLayout(container)
-
-        form_group = QGroupBox("Application")
-        form = QFormLayout(form_group)
-
-        self.name_input = QLineEdit()
-        self.name_input.textEdited.connect(self._on_name_changed)
-        form.addRow("Title", self.name_input)
-
-        self.url_input = QLineEdit()
-        self.url_input.textEdited.connect(self.mark_dirty)
-        self.url_input.editingFinished.connect(self._on_url_edit_finished)
-        form.addRow("URL", self.url_input)
-
-        self.comment_input = QLineEdit()
-        self.comment_input.textEdited.connect(self.mark_dirty)
-        form.addRow("Description", self.comment_input)
-
-        categories_row = QWidget()
-        categories_layout = QHBoxLayout(categories_row)
-        categories_layout.setContentsMargins(0, 0, 0, 0)
-        self.categories_select = QComboBox()
-        self.categories_select.addItem("Select a category\u2026")
-        self.categories_select.addItems(collect_existing_categories())
-        self.categories_select.currentIndexChanged.connect(self._on_category_selected)
-        categories_layout.addWidget(self.categories_select)
-        self.categories_input = QLineEdit()
-        self.categories_input.setPlaceholderText("Network;WebBrowser;")
-        self.categories_input.textEdited.connect(self.mark_dirty)
-        categories_layout.addWidget(self.categories_input, stretch=1)
-        form.addRow("Categories", categories_row)
-
-        filename_row = QWidget()
-        filename_layout = QHBoxLayout(filename_row)
-        filename_layout.setContentsMargins(0, 0, 0, 0)
-        self.filename_input = QLineEdit()
-        self.filename_input.textEdited.connect(self._on_filename_changed)
-        filename_layout.addWidget(self.filename_input)
-        open_folder_button = QPushButton("Open Folder")
-        open_folder_button.clicked.connect(self.open_desktop_folder)
-        filename_layout.addWidget(open_folder_button)
-        form.addRow(".desktop Filename", filename_row)
-
-        chromium_row = QWidget()
-        chromium_layout = QHBoxLayout(chromium_row)
-        chromium_layout.setContentsMargins(0, 0, 0, 0)
-        self.chromium_input = QLineEdit()
-        self.chromium_input.textEdited.connect(self.mark_dirty)
-        self.chromium_input.textEdited.connect(self._update_browser_ui)
-        chromium_layout.addWidget(self.chromium_input)
-        chromium_detect_button = QPushButton("Detect")
-        chromium_detect_button.clicked.connect(self.detect_chromium_path)
-        chromium_layout.addWidget(chromium_detect_button)
-        form.addRow("Browser Executable", chromium_row)
-
-        icon_row = QWidget()
-        icon_layout = QHBoxLayout(icon_row)
-        icon_layout.setContentsMargins(0, 0, 0, 0)
-        self.icon_input = QLineEdit()
-        self.icon_input.textEdited.connect(self.mark_dirty)
-        self.icon_input.textChanged.connect(self.update_icon_preview)
-        icon_layout.addWidget(self.icon_input)
-        browse_icon_button = QPushButton("Browse")
-        browse_icon_button.clicked.connect(self.choose_icon_file)
-        icon_layout.addWidget(browse_icon_button)
-        fetch_icon_button = QPushButton("Fetch")
-        fetch_icon_button.clicked.connect(self.fetch_icon)
-        icon_layout.addWidget(fetch_icon_button)
-        form.addRow("Icon", icon_row)
-
-        self.ignore_icon_ssl_errors_check = self._check_box("Ignore SSL certificate errors when fetching icons")
-        form.addRow("Ignore SSL errors when fetching icon", self.ignore_icon_ssl_errors_check)
-
-        self.icon_preview_label = QLabel("No icon")
-        self.icon_preview_label.setAlignment(Qt.AlignCenter)
-        self.icon_preview_label.setFixedSize(ICON_PREVIEW_SIZE + 16, ICON_PREVIEW_SIZE + 16)
-        self.icon_preview_label.setStyleSheet("QLabel { border: 1px solid palette(mid); padding: 4px; }")
-        form.addRow("Preview", self.icon_preview_label)
-
-        layout.addWidget(form_group)
-
-        return container
-
-    def _build_chromium_tab(self) -> QWidget:
-        container = QWidget()
-        self._chromium_rows.clear()
-        self._chromium_groups.clear()
-
-        search_layout = QHBoxLayout()
-        self.chromium_search_input = QLineEdit()
-        self.chromium_search_input.setPlaceholderText("Search parameters and tooltips...")
-        self.chromium_search_input.textChanged.connect(self._filter_chromium)
-        search_layout.addWidget(QLabel("Filter:"))
-        search_layout.addWidget(self.chromium_search_input, stretch=1)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-
-        inner = QWidget()
-        inner_layout = QVBoxLayout(inner)
-        app_group = self._chromium_group("App And Window")
-        app_grid = app_group.layout()
-        self.app_id_input = self._line_edit()
-        self._add_chromium_row(app_group, app_grid, 0, "app-id", self.app_id_input)
-        self.app_launch_url_input = self._line_edit()
-        self._add_chromium_row(app_group, app_grid, 1, "app-launch-url-for-shortcuts-menu-item", self.app_launch_url_input)
-        self.wm_class_input = self._line_edit()
-        self._add_chromium_row(app_group, app_grid, 2, "class", self.wm_class_input)
-        self.guest_check = self._check_box()
-        self._add_chromium_check(app_group, app_grid, 3, "guest", self.guest_check)
-        self.incognito_check = self._check_box()
-        self._add_chromium_check(app_group, app_grid, 4, "incognito", self.incognito_check)
-        self.kiosk_check = self._check_box()
-        self._add_chromium_check(app_group, app_grid, 5, "kiosk", self.kiosk_check)
-        self.wm_name_input = self._line_edit()
-        self._add_chromium_row(app_group, app_grid, 6, "name", self.wm_name_input)
-        self.new_window_check = self._check_box()
-        self._add_chromium_check(app_group, app_grid, 7, "new-window", self.new_window_check)
-        self.no_first_run_check = self._check_box()
-        self._add_chromium_check(app_group, app_grid, 8, "no-first-run", self.no_first_run_check)
-        self.start_fullscreen_check = self._check_box()
-        self._add_chromium_check(app_group, app_grid, 9, "start-fullscreen", self.start_fullscreen_check)
-        self.start_maximized_check = self._check_box()
-        self._add_chromium_check(app_group, app_grid, 10, "start-maximized", self.start_maximized_check)
-        self.window_position_input = self._line_edit("50,50")
-        self._add_chromium_row(app_group, app_grid, 11, "window-position", self.window_position_input)
-        self.window_size_input = self._line_edit("1280,800")
-        self._add_chromium_row(app_group, app_grid, 12, "window-size", self.window_size_input)
-        inner_layout.addWidget(app_group)
-
-        identity_group = self._chromium_group("Identity And Profile")
-        identity_grid = identity_group.layout()
-        self.disable_features_input = self._line_edit()
-        self._add_chromium_row(identity_group, identity_grid, 0, "disable-features", self.disable_features_input)
-        self.enable_features_input = self._line_edit()
-        self._add_chromium_row(identity_group, identity_grid, 1, "enable-features", self.enable_features_input)
-        self.lang_input = self._line_edit("en-US")
-        self._add_chromium_row(identity_group, identity_grid, 2, "lang", self.lang_input)
-        self.profile_directory_input = self._line_edit("Default")
-        self._add_chromium_row(identity_group, identity_grid, 3, "profile-directory", self.profile_directory_input)
-        self.user_data_dir_input = self._path_row_button("Browse", self.choose_user_data_dir)
-        self._add_chromium_row(identity_group, identity_grid, 4, "user-data-dir", self.user_data_dir_input["widget"])
-        self.user_agent_input = self._line_edit()
-        self._add_chromium_row(identity_group, identity_grid, 5, "user-agent", self.user_agent_input)
-        inner_layout.addWidget(identity_group)
-
-        rendering_group = self._chromium_group("Rendering And Performance")
-        rendering_grid = rendering_group.layout()
-        self.autoplay_policy_input = self._line_edit()
-        self._add_chromium_row(rendering_group, rendering_grid, 0, "autoplay-policy", self.autoplay_policy_input)
-        self.disable_dev_shm_usage_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 1, "disable-dev-shm-usage", self.disable_dev_shm_usage_check)
-        self.disable_extensions_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 2, "disable-extensions", self.disable_extensions_check)
-        self.disable_gpu_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 3, "disable-gpu", self.disable_gpu_check)
-        self.disable_renderer_backgrounding_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 4, "disable-renderer-backgrounding", self.disable_renderer_backgrounding_check)
-        self.disable_software_rasterizer_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 5, "disable-software-rasterizer", self.disable_software_rasterizer_check)
-        self.disk_cache_dir_input = self._line_edit()
-        self._add_chromium_row(rendering_group, rendering_grid, 6, "disk-cache-dir", self.disk_cache_dir_input)
-        self.disk_cache_size_input = self._line_edit()
-        self._add_chromium_row(rendering_group, rendering_grid, 7, "disk-cache-size", self.disk_cache_size_input)
-        self.force_device_scale_factor_input = self._line_edit("1.0")
-        self._add_chromium_row(rendering_group, rendering_grid, 8, "force-device-scale-factor", self.force_device_scale_factor_input)
-        self.headless_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 9, "headless", self.headless_check)
-        self.mute_audio_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 10, "mute-audio", self.mute_audio_check)
-        self.ozone_platform_hint_input = self._line_edit("auto")
-        self._add_chromium_row(rendering_group, rendering_grid, 11, "ozone-platform-hint", self.ozone_platform_hint_input)
-        self.process_per_site_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 12, "process-per-site", self.process_per_site_check)
-        self.single_process_check = self._check_box()
-        self._add_chromium_check(rendering_group, rendering_grid, 13, "single-process", self.single_process_check)
-        self.use_gl_input = self._line_edit()
-        self._add_chromium_row(rendering_group, rendering_grid, 14, "use-gl", self.use_gl_input)
-        self.virtual_time_budget_input = self._line_edit()
-        self._add_chromium_row(rendering_group, rendering_grid, 15, "virtual-time-budget", self.virtual_time_budget_input)
-        inner_layout.addWidget(rendering_group)
-
-        network_group = self._chromium_group("Network And Security")
-        network_grid = network_group.layout()
-        self.allow_insecure_localhost_check = self._check_box()
-        self._add_chromium_check(network_group, network_grid, 0, "allow-insecure-localhost", self.allow_insecure_localhost_check)
-        self.disable_background_networking_check = self._check_box()
-        self._add_chromium_check(network_group, network_grid, 1, "disable-background-networking", self.disable_background_networking_check)
-        self.disable_notifications_check = self._check_box()
-        self._add_chromium_check(network_group, network_grid, 2, "disable-notifications", self.disable_notifications_check)
-        self.disable_popup_blocking_check = self._check_box()
-        self._add_chromium_check(network_group, network_grid, 3, "disable-popup-blocking", self.disable_popup_blocking_check)
-        self.disable_web_security_check = self._check_box()
-        self._add_chromium_check(network_group, network_grid, 4, "disable-web-security", self.disable_web_security_check)
-        self.host_resolver_rules_input = self._line_edit()
-        self._add_chromium_row(network_group, network_grid, 5, "host-resolver-rules", self.host_resolver_rules_input)
-        self.ignore_certificate_errors_check = self._check_box()
-        self._add_chromium_check(network_group, network_grid, 6, "ignore-certificate-errors", self.ignore_certificate_errors_check)
-        self.no_sandbox_check = self._check_box()
-        self._add_chromium_check(network_group, network_grid, 7, "no-sandbox", self.no_sandbox_check)
-        self.proxy_bypass_input = self._line_edit()
-        self._add_chromium_row(network_group, network_grid, 8, "proxy-bypass-list", self.proxy_bypass_input)
-        self.proxy_pac_url_input = self._line_edit()
-        self._add_chromium_row(network_group, network_grid, 9, "proxy-pac-url", self.proxy_pac_url_input)
-        self.proxy_server_input = self._line_edit()
-        self._add_chromium_row(network_group, network_grid, 10, "proxy-server", self.proxy_server_input)
-        inner_layout.addWidget(network_group)
-
-        debug_group = self._chromium_group("Debug And Automation")
-        debug_grid = debug_group.layout()
-        self.auto_open_devtools_check = self._check_box()
-        self._add_chromium_check(debug_group, debug_grid, 0, "auto-open-devtools-for-tabs", self.auto_open_devtools_check)
-        self.enable_logging_check = self._check_box()
-        self._add_chromium_check(debug_group, debug_grid, 1, "enable-logging", self.enable_logging_check)
-        self.remote_debugging_port_input = self._line_edit("9222")
-        self._add_chromium_row(debug_group, debug_grid, 2, "remote-debugging-port", self.remote_debugging_port_input)
-        self.remote_debugging_pipe_check = self._check_box()
-        self._add_chromium_check(debug_group, debug_grid, 3, "remote-debugging-pipe", self.remote_debugging_pipe_check)
-        self.trace_startup_check = self._check_box()
-        self._add_chromium_check(debug_group, debug_grid, 4, "trace-startup", self.trace_startup_check)
-        self.trace_startup_file_input = self._line_edit()
-        self._add_chromium_row(debug_group, debug_grid, 5, "trace-startup-file", self.trace_startup_file_input)
-        self.vmodule_input = self._line_edit()
-        self._add_chromium_row(debug_group, debug_grid, 6, "vmodule", self.vmodule_input)
-        inner_layout.addWidget(debug_group)
-
-        extra_group = QGroupBox("Extra Flags")
-        extra_layout = QVBoxLayout(extra_group)
-        self.extra_args_input = QPlainTextEdit()
-        self.extra_args_input.setPlaceholderText("--force-device-scale-factor=1.25 --ozone-platform-hint=auto")
-        self.extra_args_input.textChanged.connect(self.mark_dirty)
-        extra_layout.addWidget(self.extra_args_input)
-        inner_layout.addWidget(extra_group)
-        inner_layout.addStretch(1)
-
-        scroll.setWidget(inner)
-        wrapper_layout = QVBoxLayout(container)
-        wrapper_layout.addLayout(search_layout)
-        wrapper_layout.addWidget(scroll)
-        self._filter_chromium("")
-        return container
+        self.tabs.currentChanged.connect(self._on_tab_changed)
 
     def _filter_chromium(self, query: str) -> None:
         if not self._chromium_rows:
@@ -431,7 +230,7 @@ class MainWindow(QMainWindow):
             group.setVisible(visible)
 
     def _update_browser_ui(self, *_args) -> None:
-        path = self.chromium_input.text().strip()
+        path = self._basic_widgets["chromium_input"].text().strip()
         if not path:
             self._current_browser = "Unknown"
             self.tabs.setTabEnabled(self._options_tab_index, False)
@@ -446,72 +245,7 @@ class MainWindow(QMainWindow):
             self.tabs.setTabEnabled(self._options_tab_index, True)
             self.tabs.setTabText(self._options_tab_index, f"{browser} Options")
 
-        self._filter_chromium(self.chromium_search_input.text())
-
-    def _chromium_group(self, title: str) -> QGroupBox:
-        group = QGroupBox(title)
-        layout = QGridLayout(group)
-        layout.setColumnStretch(1, 1)
-        self._chromium_groups.append(group)
-        return group
-
-    def _add_chromium_row(self, group: QGroupBox, layout: QGridLayout, row: int, label: str, widget: QWidget) -> None:
-        label_widget = QLabel(label)
-        tooltip = CHROMIUM_SWITCH_TOOLTIPS.get(label, "")
-        if tooltip:
-            label_widget.setToolTip(tooltip)
-            widget.setToolTip(tooltip)
-        layout.addWidget(label_widget, row, 0)
-        layout.addWidget(widget, row, 1)
-        self._chromium_rows.append({
-            "group": group,
-            "label": label_widget,
-            "widget": widget,
-            "tooltip": tooltip,
-            "flag_name": label,
-        })
-
-    def _add_chromium_check(self, group: QGroupBox, layout: QGridLayout, row: int, label: str, checkbox: QCheckBox) -> None:
-        label_widget = QLabel(label)
-        tooltip = CHROMIUM_SWITCH_TOOLTIPS.get(label, "")
-        if tooltip:
-            label_widget.setToolTip(tooltip)
-            checkbox.setToolTip(tooltip)
-        layout.addWidget(label_widget, row, 0)
-        layout.addWidget(checkbox, row, 1, alignment=Qt.AlignLeft | Qt.AlignVCenter)
-        self._chromium_rows.append({
-            "group": group,
-            "label": label_widget,
-            "widget": checkbox,
-            "tooltip": tooltip,
-            "flag_name": label,
-        })
-
-    def _path_row_button(self, button_text: str, callback) -> dict[str, QWidget]:
-        widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        line_edit = self._line_edit()
-        button = QPushButton(button_text)
-        button.clicked.connect(callback)
-        layout.addWidget(line_edit)
-        layout.addWidget(button)
-        return {"widget": widget, "line_edit": line_edit}
-
-    def _line_edit(self, placeholder: str = "") -> QLineEdit:
-        line_edit = QLineEdit()
-        if placeholder:
-            line_edit.setPlaceholderText(placeholder)
-        line_edit.textEdited.connect(self.mark_dirty)
-        return line_edit
-
-    def _check_box(self, text: str = "") -> QCheckBox:
-        checkbox = QCheckBox()
-        checkbox.setText("")
-        if text:
-            checkbox.setToolTip(text)
-        checkbox.toggled.connect(self.mark_dirty)
-        return checkbox
+        self._filter_chromium(self._browser_widgets["chromium_search_input"].text())
 
     def _on_tab_changed(self, index: int) -> None:
         if self.tabs.widget(index) == self.webapps_tab:
@@ -537,8 +271,13 @@ class MainWindow(QMainWindow):
         if not desktop_path.exists():
             QMessageBox.warning(self, APP_NAME, f"Desktop file not found:\n{desktop_path}")
             return
-        subprocess.Popen(['gio', 'launch', str(desktop_path)], start_new_session=True,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.Popen(['gtk-launch', desktop_path.name], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            subprocess.Popen(['xdg-open', str(desktop_path)], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        logger.info("Launched web app: %s", desktop_path)
 
     def open_webapp_list_item(self, item: QListWidgetItem) -> None:
         if not self._confirm_discard():
@@ -609,60 +348,21 @@ class MainWindow(QMainWindow):
                 errors.append(f"Could not remove {data_dir}: {exc}")
 
         refresh_results = run_refresh_commands()
+        invalidate_category_cache()
         self.refresh_webapps_list()
 
         if errors:
             QMessageBox.warning(self, APP_NAME, "\n".join(errors + ["", *refresh_results]))
         else:
             QMessageBox.information(self, APP_NAME, "Web app removed.\n\nThe application menu and desktop icons have been updated.")
+            logger.info("Uninstalled web app: %s", desktop_path)
 
     def _build_webapp_item_widget(self, config: WebAppConfig) -> QWidget:
-        widget = QWidget()
-        widget.setObjectName("WebAppItem")
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(12, 5, 12, 8)
-        layout.setSpacing(12)
+        widget = build_webapp_item_widget(config)
+        layout = widget.layout()
 
-        icon_label = QLabel()
-        icon_label.setFixedSize(48, 48)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon = webapp_icon(config.icon_path)
-        pixmap = icon.pixmap(48, 48)
-        if pixmap.isNull():
-            pixmap = app_icon().pixmap(48, 48)
-        icon_label.setPixmap(pixmap)
-        layout.addWidget(icon_label)
-
-        text_container = QWidget()
-        text_layout = QVBoxLayout(text_container)
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(2)
-
-        title_label = QLabel(config.name or config.desktop_filename)
-        title_label.setStyleSheet("font-weight: 600;")
-        title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        text_layout.addWidget(title_label)
-
-        detail_label = QLabel(config.url or config.desktop_path)
-        detail_color = detail_label.palette().color(QPalette.WindowText)
-        detail_color.setAlpha(180)
-        detail_label.setStyleSheet(
-            "color: rgba(%d, %d, %d, %d);" % (
-                detail_color.red(),
-                detail_color.green(),
-                detail_color.blue(),
-                detail_color.alpha(),
-            )
-        )
-        detail_label.setWordWrap(True)
-        detail_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        text_layout.addWidget(detail_label)
-
-        layout.addWidget(text_container, stretch=1)
-
-        open_button = QPushButton("Launch")
+        open_button = layout.itemAt(2).widget()
         open_button.clicked.connect(lambda *_args, p=config.desktop_path: self.launch_webapp_by_path(p))
-        layout.addWidget(open_button)
 
         if self._is_user_webapp(Path(config.desktop_path)):
             edit_button = QPushButton("Edit")
@@ -740,8 +440,8 @@ class MainWindow(QMainWindow):
         self.mark_dirty()
         if self._filename_auto_sync:
             suggested = f"{slugify(text)}.desktop"
-            with QSignalBlocker(self.filename_input):
-                self.filename_input.setText(suggested)
+            with QSignalBlocker(self._basic_widgets["filename_input"]):
+                self._basic_widgets["filename_input"].setText(suggested)
         self._sync_derived_paths()
 
     def _on_filename_changed(self, *_args) -> None:
@@ -750,30 +450,34 @@ class MainWindow(QMainWindow):
         self._sync_derived_paths()
 
     def _sync_derived_paths(self) -> None:
-        if not self.user_data_dir_input["line_edit"].text().strip():
-            filename = self.filename_input.text().strip() or "webapp.desktop"
-            with QSignalBlocker(self.user_data_dir_input["line_edit"]):
-                self.user_data_dir_input["line_edit"].setText(default_user_data_dir(filename))
+        if not self._browser_widgets["user_data_dir_input"]["line_edit"].text().strip():
+            filename = self._basic_widgets["filename_input"].text().strip() or "webapp.desktop"
+            with QSignalBlocker(self._browser_widgets["user_data_dir_input"]["line_edit"]):
+                self._browser_widgets["user_data_dir_input"]["line_edit"].setText(default_user_data_dir(filename))
         self._update_target_label()
 
     def _on_url_edit_finished(self) -> None:
         self.mark_dirty()
-        url = self.url_input.text().strip()
-        if url and not self.icon_input.text().strip() and url not in self._fetched_icon_urls:
-            self._fetched_icon_urls.add(url)
+        url = self._basic_widgets["url_input"].text().strip()
+        validated = validate_url(url)
+        if validated:
+            with QSignalBlocker(self._basic_widgets["url_input"]):
+                self._basic_widgets["url_input"].setText(validated)
+        if validated and not self._basic_widgets["icon_input"].text().strip() and validated not in self._fetched_icon_urls:
+            self._fetched_icon_urls.add(validated)
             self.fetch_icon(silent=True)
 
     def _on_category_selected(self, index: int) -> None:
         if index <= 0:
             return
-        updated = append_category_value(self.categories_input.text(), self.categories_select.itemText(index))
-        self.categories_input.setText(updated)
-        with QSignalBlocker(self.categories_select):
-            self.categories_select.setCurrentIndex(0)
+        updated = append_category_value(self._basic_widgets["categories_input"].text(), self._basic_widgets["categories_select"].itemText(index))
+        self._basic_widgets["categories_input"].setText(updated)
+        with QSignalBlocker(self._basic_widgets["categories_select"]):
+            self._basic_widgets["categories_select"].setCurrentIndex(0)
         self.mark_dirty()
 
     def _update_target_label(self) -> None:
-        filename = self.filename_input.text().strip() or "webapp.desktop"
+        filename = self._basic_widgets["filename_input"].text().strip() or "webapp.desktop"
         if not filename.endswith(".desktop"):
             filename = f"{filename}.desktop"
         target = USER_APPLICATIONS_DIR / filename
@@ -782,8 +486,8 @@ class MainWindow(QMainWindow):
     def update_icon_preview(self, icon_path: str) -> None:
         path = icon_path.strip()
         if not path:
-            self.icon_preview_label.setPixmap(QPixmap())
-            self.icon_preview_label.setText("No icon")
+            self._basic_widgets["icon_preview_label"].setPixmap(QPixmap())
+            self._basic_widgets["icon_preview_label"].setText("No icon")
             return
 
         icon = QIcon(path)
@@ -791,8 +495,8 @@ class MainWindow(QMainWindow):
         if pixmap.isNull():
             pixmap = QPixmap(path)
         if pixmap.isNull():
-            self.icon_preview_label.setPixmap(QPixmap())
-            self.icon_preview_label.setText("Invalid icon")
+            self._basic_widgets["icon_preview_label"].setPixmap(QPixmap())
+            self._basic_widgets["icon_preview_label"].setText("Invalid icon")
             return
 
         scaled = pixmap.scaled(
@@ -801,10 +505,14 @@ class MainWindow(QMainWindow):
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
-        self.icon_preview_label.setText("")
-        self.icon_preview_label.setPixmap(scaled)
+        self._basic_widgets["icon_preview_label"].setText("")
+        self._basic_widgets["icon_preview_label"].setPixmap(scaled)
 
     def _get_widget(self, name: str) -> QWidget:
+        if name in self._basic_widgets:
+            return self._basic_widgets[name]
+        if name in self._browser_widgets:
+            return self._browser_widgets[name]
         return getattr(self, name)
 
     def _apply_config_to_ui(self, config: WebAppConfig) -> None:
@@ -855,11 +563,11 @@ class MainWindow(QMainWindow):
         self._update_browser_ui()
 
     def gather_config(self) -> WebAppConfig:
-        filename = self.filename_input.text().strip() or f"{slugify(self.name_input.text())}.desktop"
+        filename = self._basic_widgets["filename_input"].text().strip() or f"{slugify(self._basic_widgets['name_input'].text())}.desktop"
         if not filename.endswith(".desktop"):
             filename = f"{filename}.desktop"
         desktop_path = str(USER_APPLICATIONS_DIR / filename)
-        user_data_dir = self.user_data_dir_input["line_edit"].text().strip() or default_user_data_dir(filename)
+        user_data_dir = self._browser_widgets["user_data_dir_input"]["line_edit"].text().strip() or default_user_data_dir(filename)
         data = self._collect_ui_to_config()
         data["desktop_filename"] = filename
         data["desktop_path"] = desktop_path
@@ -873,6 +581,7 @@ class MainWindow(QMainWindow):
         self.load_config(WebAppConfig(chromium_path=detect_chromium(), desktop_filename="webapp.desktop"))
         self.tabs.setCurrentIndex(0)
         self.statusBar().showMessage("Form cleared.")
+        logger.debug("New config created")
 
     def detect_chromium_path(self, *_args) -> None:
         found = detect_all_chromiums()
@@ -881,7 +590,8 @@ class MainWindow(QMainWindow):
             return
         if len(found) == 1:
             path = next(iter(found.values()))
-            self.chromium_input.setText(path)
+            self._basic_widgets["chromium_input"].setText(path)
+            save_last_browser(path)
             self.mark_dirty()
             self._update_browser_ui()
             self.statusBar().showMessage(f"Detected: {path}")
@@ -894,7 +604,8 @@ class MainWindow(QMainWindow):
         )
         if ok and item:
             path = item.split("  (", 1)[1].rstrip(")")
-            self.chromium_input.setText(path)
+            self._basic_widgets["chromium_input"].setText(path)
+            save_last_browser(path)
             self.mark_dirty()
             self._update_browser_ui()
             self.statusBar().showMessage(f"Selected: {path}")
@@ -907,49 +618,54 @@ class MainWindow(QMainWindow):
             "Images (*.png *.svg *.ico *.jpg *.jpeg *.webp)",
         )
         if path:
-            filename = self.filename_input.text().strip() or f"{slugify(self.name_input.text())}.desktop"
+            filename = self._basic_widgets["filename_input"].text().strip() or f"{slugify(self._basic_widgets['name_input'].text())}.desktop"
             slug = icon_slug_for_desktop_filename(filename)
             try:
                 icon_path = store_icon_file(path, slug)
             except Exception as exc:
                 QMessageBox.warning(self, APP_NAME, str(exc))
                 return
-            self.icon_input.setText(str(icon_path))
+            self._basic_widgets["icon_input"].setText(str(icon_path))
             self.mark_dirty()
             self.statusBar().showMessage(f"Icon saved to {icon_path}")
 
     def choose_user_data_dir(self, *_args) -> None:
         path = QFileDialog.getExistingDirectory(self, "Choose user-data-dir", str(Path.home()))
         if path:
-            self.user_data_dir_input["line_edit"].setText(path)
+            self._browser_widgets["user_data_dir_input"]["line_edit"].setText(path)
             self.mark_dirty()
 
     def fetch_icon(self, silent: bool = False) -> None:
-        url = self.url_input.text().strip()
-        if not url:
+        url = self._basic_widgets["url_input"].text().strip()
+        validated = validate_url(url)
+        if not validated:
             if not silent:
-                QMessageBox.warning(self, APP_NAME, "Enter a URL before fetching the icon.")
+                QMessageBox.warning(self, APP_NAME, "Enter a valid URL before fetching the icon.")
             return
-        filename = self.filename_input.text().strip() or f"{slugify(self.name_input.text())}.desktop"
-        slug = icon_slug_for_desktop_filename(filename)
+        if self._icon_fetching:
+            return
+        filename = self._basic_widgets["filename_input"].text().strip() or f"{slugify(self._basic_widgets['name_input'].text())}.desktop"
         self.statusBar().showMessage("Downloading icon...")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            icon_path = fetch_icon_for_url(
-                url,
-                slug,
-                ignore_ssl_errors=self.ignore_icon_ssl_errors_check.isChecked(),
-            )
-            self.icon_input.setText(str(icon_path))
-            self.mark_dirty()
-            self.statusBar().showMessage(f"Icon saved to {icon_path}")
-        except Exception as exc:
-            self.statusBar().showMessage("Could not download the icon.")
-            self.icon_input.setText("")
-            if not silent:
-                QMessageBox.warning(self, APP_NAME, str(exc))
-        finally:
-            QApplication.restoreOverrideCursor()
+        self._icon_fetching = True
+
+        worker = IconFetchWorker(validated, filename, self._basic_widgets["ignore_icon_ssl_errors_check"].isChecked())
+        worker.signals.finished.connect(self._on_icon_fetch_success)
+        worker.signals.error.connect(lambda err: self._on_icon_fetch_error(err, silent))
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_icon_fetch_success(self, icon_path: str) -> None:
+        self._icon_fetching = False
+        self._basic_widgets["icon_input"].setText(icon_path)
+        self.mark_dirty()
+        self.statusBar().showMessage(f"Icon saved to {icon_path}")
+        logger.info("Icon fetched successfully: %s", icon_path)
+
+    def _on_icon_fetch_error(self, error: str, silent: bool) -> None:
+        self._icon_fetching = False
+        self.statusBar().showMessage("Could not download the icon.")
+        self._basic_widgets["icon_input"].setText("")
+        if not silent:
+            QMessageBox.warning(self, APP_NAME, error)
 
     def open_desktop(self, path: Path) -> bool:
         try:
@@ -959,10 +675,11 @@ class MainWindow(QMainWindow):
             return False
         self.load_config(config)
         self.statusBar().showMessage(f"Loaded: {path}")
+        logger.info("Loaded desktop file: %s", path)
         return True
 
     def open_desktop_folder(self, *_args) -> None:
-        filename = self.filename_input.text().strip() or "webapp.desktop"
+        filename = self._basic_widgets["filename_input"].text().strip() or "webapp.desktop"
         if not filename.endswith(".desktop"):
             filename = f"{filename}.desktop"
         target = USER_APPLICATIONS_DIR / filename
@@ -974,12 +691,14 @@ class MainWindow(QMainWindow):
 
     def save_desktop(self, *_args) -> None:
         config = self.gather_config()
+        url_validated = validate_url(config.url)
         if not config.name:
             QMessageBox.warning(self, APP_NAME, "The title is required.")
             return
-        if not config.url.strip():
-            QMessageBox.warning(self, APP_NAME, "The URL is required.")
+        if not url_validated:
+            QMessageBox.warning(self, APP_NAME, "The URL is required and must be valid.")
             return
+        config.url = url_validated
         if not config.chromium_path:
             QMessageBox.warning(self, APP_NAME, "Configure the Chrome/Chromium executable.")
             return
@@ -996,7 +715,7 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 QMessageBox.warning(self, APP_NAME, str(exc))
                 return
-            self.icon_input.setText(str(icon_path))
+            self._basic_widgets["icon_input"].setText(str(icon_path))
             config.icon_path = str(icon_path)
 
         try:
@@ -1015,6 +734,7 @@ class MainWindow(QMainWindow):
             return
 
         refresh_results = run_refresh_commands()
+        invalidate_category_cache()
         self.current_config = config
         self.current_config.opened_from_existing = True
         self._dirty = False
@@ -1026,6 +746,7 @@ class MainWindow(QMainWindow):
         )
         self.refresh_webapps_list()
         self.statusBar().showMessage(f"Saved: {target}")
+        logger.info("Saved web app: %s", target)
 
     def _confirm_discard(self) -> bool:
         if not self._dirty:
@@ -1075,6 +796,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._confirm_discard():
-            event.accept()
+            save_window_geometry(self.geometry())
+            super().closeEvent(event)
         else:
             event.ignore()

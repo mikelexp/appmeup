@@ -13,7 +13,10 @@ from PySide6.QtCore import QByteArray
 from PySide6.QtGui import QIcon, QImage, QPixmap
 
 from src.constants import ICON_DIR
+from src.logger import setup_logging
 from src.utils import slugify
+
+logger = setup_logging()
 
 
 def app_asset_path(name: str) -> Path:
@@ -115,6 +118,7 @@ def fetch_url(url: str, ignore_ssl_errors: bool = False) -> bytes:
 
 
 def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False) -> Path:
+    logger.debug("Fetching icon for URL: %s", page_url)
     page_html = fetch_url(page_url, ignore_ssl_errors=ignore_ssl_errors).decode("utf-8", errors="replace")
     parser = IconLinkParser()
     parser.feed(page_html)
@@ -135,6 +139,7 @@ def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False
         parsed = urlparse(page_url)
         best_url = f"{parsed.scheme}://{parsed.netloc}/favicon.ico"
 
+    logger.debug("Best icon URL: %s", best_url)
     data = fetch_url(best_url, ignore_ssl_errors=ignore_ssl_errors)
 
     qimg = QImage()
@@ -145,6 +150,7 @@ def fetch_icon_for_url(page_url: str, slug: str, ignore_ssl_errors: bool = False
     target.parent.mkdir(parents=True, exist_ok=True)
     if not qimg.save(str(target), "PNG"):
         raise RuntimeError(f"Failed to save icon to {target}")
+    logger.debug("Icon saved to %s", target)
     return target
 
 

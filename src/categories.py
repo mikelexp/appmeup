@@ -7,8 +7,19 @@ from typing import Iterable
 
 from src.constants import DESKTOP_APPLICATION_DIRS
 
+_category_cache: list[str] | None = None
+
+
+def invalidate_category_cache() -> None:
+    global _category_cache
+    _category_cache = None
+
 
 def collect_existing_categories() -> list[str]:
+    global _category_cache
+    if _category_cache is not None:
+        return _category_cache
+
     seen: set[str] = set()
     categories: list[str] = []
 
@@ -30,7 +41,8 @@ def collect_existing_categories() -> list[str]:
                     seen.add(cat)
                     categories.append(cat)
 
-    return sorted(categories, key=str.casefold)
+    _category_cache = sorted(categories, key=str.casefold)
+    return _category_cache
 
 
 def parse_categories(value: str) -> list[str]:

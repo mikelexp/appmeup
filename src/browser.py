@@ -3,22 +3,11 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from src.constants import BROWSER_NAME_FROM_BINARY
+from src.constants import BROWSER_DETECTION_ORDER, BROWSER_DISPLAY_NAMES, BROWSER_NAME_FROM_BINARY
 
 
 def detect_chromium() -> str:
-    names = [
-        "google-chrome-stable",
-        "google-chrome",
-        "chrome",
-        "chromium-browser",
-        "chromium",
-        "brave-browser",
-        "brave",
-        "vivaldi-stable",
-        "vivaldi",
-    ]
-    for name in names:
+    for name in BROWSER_DETECTION_ORDER:
         path = shutil.which(name)
         if path:
             return path
@@ -27,21 +16,10 @@ def detect_chromium() -> str:
 
 def detect_all_chromiums() -> dict[str, str]:
     found: dict[str, str] = {}
-    names = [
-        ("Google Chrome (Stable)", "google-chrome-stable"),
-        ("Google Chrome", "google-chrome"),
-        ("Chrome", "chrome"),
-        ("Chromium (Browser)", "chromium-browser"),
-        ("Chromium", "chromium"),
-        ("Brave (Browser)", "brave-browser"),
-        ("Brave", "brave"),
-        ("Vivaldi Stable", "vivaldi-stable"),
-        ("Vivaldi", "vivaldi"),
-    ]
-    for display_name, binary in names:
+    for binary in BROWSER_DETECTION_ORDER:
         path = shutil.which(binary)
         if path:
-            found[display_name] = path
+            found[BROWSER_DISPLAY_NAMES[binary]] = path
     return found
 
 

@@ -9,6 +9,10 @@ from pathlib import Path
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 
+from src.logger import setup_logging
+
+logger = setup_logging()
+
 
 def current_desktop() -> str:
     return os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
@@ -42,10 +46,12 @@ def detect_refresh_commands() -> list[list[str]]:
 def run_refresh_commands() -> list[str]:
     results: list[str] = []
     for cmd in detect_refresh_commands():
+        logger.debug("Running refresh: %s", shlex.join(cmd))
         try:
             subprocess.run(cmd, capture_output=True, timeout=30)
         except (OSError, subprocess.TimeoutExpired) as exc:
             results.append(f"Warning: {shlex.join(cmd)} failed: {exc}")
+            logger.warning("Refresh command failed: %s - %s", shlex.join(cmd), exc)
     return results
 
 
