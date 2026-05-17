@@ -38,18 +38,18 @@ jobs:
           cp icon.png release/
           cp LICENSE release/
 
-          cat > release/mikelexp.appmeup.desktop << 'DESKTOP_EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=AppMeUp!
-Comment=Create and edit Chromium web apps from .desktop files
-Exec=appmeup
-Icon=mikelexp.appmeup
-Categories=Network;WebBrowser;Utility;
-Terminal=false
-StartupNotify=true
-DESKTOP_EOF
+          {
+            echo "[Desktop Entry]"
+            echo "Version=1.0"
+            echo "Type=Application"
+            echo "Name=AppMeUp!"
+            echo "Comment=Create and edit Chromium web apps from .desktop files"
+            echo "Exec=appmeup"
+            echo "Icon=mikelexp.appmeup"
+            echo "Categories=Network;WebBrowser;Utility;"
+            echo "Terminal=false"
+            echo "StartupNotify=true"
+          } > release/mikelexp.appmeup.desktop
 
           cp scripts/install.sh release/
           chmod +x release/install.sh release/appmeup
