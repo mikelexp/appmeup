@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+
+      - name: Install build dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Build with Nuitka (onefile)
+        run: .venv/bin/python build_nuitka.py --clean --onefile
+
+      - name: Package release tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+          cp dist/appmeup.bin release/appmeup
+          cp icon.png release/
+          cp LICENSE release/
+
+          cat > release/mikelexp.appmeup.desktop << 'DESKTOP_EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AppMeUp!
+Comment=Create and edit Chromium web apps from .desktop files
+Exec=appmeup
+Icon=mikelexp.appmeup
+Categories=Network;WebBrowser;Utility;
+Terminal=false
+StartupNotify=true
+DESKTOP_EOF
+
+          cp scripts/install.sh release/
+          chmod +x release/install.sh release/appmeup
+
+          cd release
+          tar czf "../appmeup-${VERSION}-linux-x86_64.tar.gz" \
+            appmeup icon.png LICENSE mikelexp.appmeup.desktop install.sh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: appmeup-*-linux-x86_64.tar.gz
+          generate_release_notes: true
