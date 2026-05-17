@@ -1,5 +1,5 @@
-# Maintainer: Mikele <mikele@example.com>
-# Contributor: Mikele <mikele@example.com>
+# Maintainer: Mikele <mikele@gmail.com>
+# Contributor: Mikele <mikele@gmail.com>
 
 pkgname=appmeup-bin
 pkgver=1.2
@@ -16,7 +16,7 @@ optdepends=(
   'vivaldi: Vivaldi browser'
 )
 source=("${url}/releases/download/v${pkgver}/appmeup-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('f1063ada2bd960acb3e04e0997ff4dd5701b0d1ed07b81cc0f767b7765a442ea')
 
 package() {
   cd "${srcdir}"
