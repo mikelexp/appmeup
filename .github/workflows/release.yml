@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -62,4 +64,3 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: appmeup-*-linux-x86_64.tar.gz
-          generate_release_notes: true
