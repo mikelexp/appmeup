@@ -22,6 +22,7 @@ FLAG_DEFINITIONS: list[dict] = [
     {"attr": "user_data_dir", "flag": "--user-data-dir=", "type": "value"},
     {"attr": "wm_class", "flag": "--class=", "type": "value", "derive": "effective_wm_class"},
     {"attr": "wm_name", "flag": "--name=", "type": "value"},
+    {"attr": "url", "flag": "--app=", "type": "value"},
     {"attr": "app_id", "flag": "--app-id=", "type": "value"},
     {"attr": "app_launch_url_for_shortcuts_menu_item", "flag": "--app-launch-url-for-shortcuts-menu-item=", "type": "value"},
     {"attr": "window_size", "flag": "--window-size=", "type": "value"},
@@ -274,7 +275,6 @@ def load_desktop_file(path: Path) -> WebAppConfig:
 
     data: dict = {
         "name": entry.get("Name", ""),
-        "url": str(options.get("app_url", "")),
         "comment": entry.get("Comment", ""),
         "categories": entry.get("Categories", DEFAULT_CATEGORIES),
         "icon_path": entry.get("Icon", ""),
@@ -288,7 +288,7 @@ def load_desktop_file(path: Path) -> WebAppConfig:
 
     for definition in FLAG_DEFINITIONS:
         attr = definition["attr"]
-        if definition.get("derive"):
+        if definition.get("derive") and attr != "wm_class":
             continue
         raw = options.get(attr, "")
         if definition["type"] == "bool":
