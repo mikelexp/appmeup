@@ -1,7 +1,7 @@
 PYTHON := .venv/bin/python
 SCRIPTS := scripts
 
-.PHONY: help run install-deps build-standalone build-onefile clean clean-build install
+.PHONY: help run install-deps build-standalone build-onefile clean clean-build install uninstall
 
 help:
 	@echo "Targets:"
@@ -12,6 +12,7 @@ help:
 	@echo "  clean            Remove venv, build, and dist"
 	@echo "  clean-build      Remove build artifacts only"
 	@echo "  install          Install the built app system-wide"
+	@echo "  uninstall        Remove the installed app"
 
 run: $(PYTHON)
 	$(PYTHON) appmeup.py
@@ -33,6 +34,9 @@ clean-build:
 
 install:
 	@bash $(SCRIPTS)/install.sh
+
+uninstall:
+	@bash $(SCRIPTS)/uninstall.sh
 
 $(PYTHON):
 	$(MAKE) install-deps

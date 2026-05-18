@@ -25,5 +25,8 @@ clean-build:
 install:
     bash {{scripts}}/install.sh
 
+uninstall:
+    bash {{scripts}}/uninstall.sh
+
 _ensure-python:
     @if [ ! -f '{{python}}' ]; then just install-deps; fi
