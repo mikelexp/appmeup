@@ -28,62 +28,32 @@ publicado con el tarball listo para descargar.
 
 ## 2. AUR (appmeup-bin)
 
-Una vez que el GitHub Release está publicado, actualizás el paquete de AUR.
-
-### 2a. Conseguí el checksum del tarball
-
-```bash
-gh release download v1.3 --repo mikelexp/appmeup --pattern '*.tar.gz' --clobber
-sha256sum appmeup-1.3-linux-x86_64.tar.gz
-```
-
-Te va a mostrar algo como:
-```
-f1063ada2bd960acb3e04e0997ff4dd5701b0d1ed07b81cc0f767b7765a442ea  appmeup-1.3-linux-x86_64.tar.gz
-```
-Esa cadena larga es el checksum. La vas a necesitar en el próximo paso.
-
-### 2b. Actualizá el PKGBUILD
-
-Abrí `PKGBUILD` y cambiá:
-
-- `pkgver=1.2` → `pkgver=1.3`
-- `pkgrel=1` → `pkgrel=1` (resetealo a 1 para versión nueva)
-- `sha256sums=('...')` → pegá el checksum que sacaste antes
-
-### 2c. Subí a AUR
+Una vez que el GitHub Release está publicado, actualizás el paquete de AUR
+automáticamente con un solo comando:
 
 ```bash
-# Entrá al repo de AUR (lo clonaste la primera vez)
-cd /tmp/appmeup-bin
-
-# Copiá el PKGBUILD actualizado
-cp /ruta/a/tu/proyecto/AppMeUp/PKGBUILD .
-
-# Verificá que todo funciona
-makepkg -s
-
-# Generá el archivo .SRCINFO (lo necesita AUR)
-makepkg --printsrcinfo > .SRCINFO
-
-# Subí
-git add PKGBUILD .SRCINFO
-git commit -m "bump to v1.3"
-git push origin master
+make aur-update
+# o
+just aur-update
 ```
 
-Listo. En unos minutos el paquete actualizado aparece en AUR y los usuarios
-pueden instalarlo con `yay -S appmeup-bin`.
+El script (`scripts/aur-update.sh`) hace todo solo:
+1. Lee la versión de `src/constants.py`
+2. Descarga el tarball del Release
+3. Calcula el SHA256
+4. Clona el repo AUR desde cero
+5. Actualiza `PKGBUILD` (versión, checksum, resetea pkgrel)
+6. Corre `makepkg -s` para verificar
+7. Genera `.SRCINFO`
+8. Commitea y pushea a AUR
 
 ---
 
 ## En resumen
 
 ```
-1. src/constants.py  → cambiar versión
+1. src/constants.py → cambiar versión
 2. git commit + tag + push
 3. Esperar a que GitHub Actions termine el build
-4. gh release download → sha256sum
-5. PKGBUILD → cambiar versión y checksum
-6. cd /tmp/appmeup-bin → makepkg → .SRCINFO → git push
+4. make aur-update
 ```

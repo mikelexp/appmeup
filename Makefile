@@ -14,6 +14,7 @@ help:
 	@echo "  install          Install the built app system-wide"
 	@echo "  uninstall        Remove the installed app"
 	@echo "  uninstall-purge  Remove app + all data (settings, icons, profiles)"
+	@echo "  aur-update       Build and push AUR package for current version"
 
 run: $(PYTHON)
 	$(PYTHON) appmeup.py
@@ -41,6 +42,9 @@ uninstall:
 
 uninstall-purge:
 	@bash $(SCRIPTS)/uninstall.sh --purge
+
+aur-update:
+	@bash $(SCRIPTS)/aur-update.sh
 
 $(PYTHON):
 	$(MAKE) install-deps

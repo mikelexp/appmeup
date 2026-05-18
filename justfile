@@ -31,5 +31,8 @@ uninstall:
 uninstall-purge:
     bash {{scripts}}/uninstall.sh --purge
 
+aur-update:
+    bash {{scripts}}/aur-update.sh
+
 _ensure-python:
     @if [ ! -f '{{python}}' ]; then just install-deps; fi
