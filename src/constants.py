@@ -7,7 +7,7 @@ from xdg.BaseDirectory import xdg_data_dirs
 
 APP_ID = "mikelexp.appmeup"
 APP_NAME = "AppMeUp!"
-APP_VERSION = "1.2"
+APP_VERSION = "1.2.1"
 APP_DESCRIPTION = "A desktop app for creating and editing Chrome/Chromium-based web apps in Linux."
 USER_APPLICATIONS_DIR = Path.home() / ".local/share/applications"
 DESKTOP_APPLICATION_DIRS = [Path(directory) / "applications" for directory in xdg_data_dirs]
