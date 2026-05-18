@@ -9,6 +9,17 @@ INSTALL_LIB="${HOME}/.local/lib/${APP_ID}"
 INSTALL_APPS="${HOME}/.local/share/applications"
 INSTALL_ICONS="${HOME}/.local/share/icons/hicolor/512x512/apps"
 
+SETTINGS_DIR="${HOME}/.local/state/appmeup"
+ICON_CACHE_DIR="${HOME}/.local/share/icons/appmeup"
+PROFILE_DIR="${HOME}/.local/share/appmeup/profiles"
+
+PURGE=false
+for arg in "$@"; do
+    case "$arg" in
+        --purge|-p) PURGE=true ;;
+    esac
+done
+
 echo "Uninstalling AppMeUp!..."
 
 rm -f "${INSTALL_BIN}/${APP_BIN_NAME}"
@@ -16,7 +27,13 @@ rm -f "${INSTALL_APPS}/${APP_ID}.desktop"
 rm -f "${INSTALL_ICONS}/${APP_ID}.png"
 rm -rf "${INSTALL_LIB}"
 
-# Refresh caches
+if $PURGE; then
+    echo "Removing app data..."
+    rm -rf "${SETTINGS_DIR}"
+    rm -rf "${ICON_CACHE_DIR}"
+    rm -rf "${PROFILE_DIR}"
+fi
+
 if command -v update-desktop-database &>/dev/null; then
     update-desktop-database "${INSTALL_APPS}"
 fi
@@ -28,3 +45,8 @@ if command -v xdg-desktop-menu &>/dev/null; then
 fi
 
 echo "Done."
+if $PURGE; then
+    echo "  (app data removed)"
+else
+    echo "  (app data kept — use 'uninstall.sh --purge' to remove it)"
+fi

@@ -28,5 +28,8 @@ install:
 uninstall:
     bash {{scripts}}/uninstall.sh
 
+uninstall-purge:
+    bash {{scripts}}/uninstall.sh --purge
+
 _ensure-python:
     @if [ ! -f '{{python}}' ]; then just install-deps; fi

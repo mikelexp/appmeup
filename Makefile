@@ -13,6 +13,7 @@ help:
 	@echo "  clean-build      Remove build artifacts only"
 	@echo "  install          Install the built app system-wide"
 	@echo "  uninstall        Remove the installed app"
+	@echo "  uninstall-purge  Remove app + all data (settings, icons, profiles)"
 
 run: $(PYTHON)
 	$(PYTHON) appmeup.py
@@ -37,6 +38,9 @@ install:
 
 uninstall:
 	@bash $(SCRIPTS)/uninstall.sh
+
+uninstall-purge:
+	@bash $(SCRIPTS)/uninstall.sh --purge
 
 $(PYTHON):
 	$(MAKE) install-deps
