@@ -62,7 +62,7 @@ from src.logger import setup_logging
 from src.settings import load_last_browser, restore_window_geometry, save_last_browser, save_window_geometry
 from src.ui import build_basic_tab, build_browser_tab, build_webapp_item_widget, build_webapps_tab
 from src.ui_fields import _UI_TEXT_FIELDS, _UI_CHECKBOX_FIELDS
-from src.updater import UpdateCheckWorker, UpdateDownloadWorker
+from src.updater import UpdateCheckWorker, UpdateDownloadWorker, is_aur_install
 from src.utils import default_user_data_dir, slugify, validate_url
 
 logger = setup_logging()
@@ -801,11 +801,23 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def _check_for_updates_startup(self) -> None:
+        if is_aur_install():
+            return
         worker = UpdateCheckWorker()
         worker.signals.update_available.connect(self._on_update_available)
         QThreadPool.globalInstance().start(worker)
 
     def _check_for_updates_manual(self) -> None:
+        if is_aur_install():
+            QMessageBox.information(
+                self,
+                "Update Check",
+                f"This installation of {APP_NAME} is managed by AUR.\n\n"
+                "Updates are handled by your package manager:\n"
+                "  yay -S appmeup-bin\n"
+                "  paru -S appmeup-bin",
+            )
+            return
         self.statusBar().showMessage("Checking for updates...")
         worker = UpdateCheckWorker()
         worker.signals.update_available.connect(self._on_update_available)

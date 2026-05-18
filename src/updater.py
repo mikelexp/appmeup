@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -11,7 +12,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
-from src.constants import APP_VERSION
+from src.constants import APP_NAME, APP_VERSION
 from src.logger import setup_logging
 
 logger = setup_logging()
@@ -19,6 +20,17 @@ logger = setup_logging()
 GITHUB_REPO = "mikelexp/appmeup"
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 BINARY_NAME = "appmeup"
+PACMAN_PACKAGE = "appmeup-bin"
+
+
+def is_aur_install() -> bool:
+    path = Path(sys.argv[0]).resolve()
+    parent = path.parent
+    if parent == Path("/usr/bin") or parent == Path("/usr/local/bin"):
+        return True
+    if parent == Path("/bin") or parent == Path("/sbin") or parent == Path("/usr/sbin"):
+        return True
+    return False
 
 
 class UpdateCheckSignals(QObject):
