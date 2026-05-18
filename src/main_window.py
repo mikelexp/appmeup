@@ -4,9 +4,10 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import QThreadPool, QSignalBlocker, Qt, QUrl
+from PySide6.QtCore import QThreadPool, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -61,6 +62,7 @@ from src.logger import setup_logging
 from src.settings import load_last_browser, restore_window_geometry, save_last_browser, save_window_geometry
 from src.ui import build_basic_tab, build_browser_tab, build_webapp_item_widget, build_webapps_tab
 from src.ui_fields import _UI_TEXT_FIELDS, _UI_CHECKBOX_FIELDS
+from src.updater import UpdateCheckWorker, UpdateDownloadWorker
 from src.utils import default_user_data_dir, slugify, validate_url
 
 logger = setup_logging()
@@ -88,6 +90,7 @@ class MainWindow(QMainWindow):
         self.load_config(self.current_config)
         self.refresh_webapps_list()
         self.statusBar().showMessage("Ready.")
+        QTimer.singleShot(1000, self._check_for_updates_startup)
         logger.debug("MainWindow initialized")
 
     def _restore_geometry(self) -> None:
@@ -112,6 +115,9 @@ class MainWindow(QMainWindow):
         website_action = QAction("Go to the app's website", self)
         website_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/mikelexp/appmeup")))
         help_menu.addAction(website_action)
+        check_update_action = QAction("Check for Updates...", self)
+        check_update_action.triggered.connect(self._check_for_updates_manual)
+        help_menu.addAction(check_update_action)
         about_action = QAction("About AppMeUp!", self)
         about_action.triggered.connect(self._show_about_dialog)
         help_menu.addAction(about_action)
@@ -793,6 +799,64 @@ class MainWindow(QMainWindow):
         dialog.setFixedSize(400, 200)
         button_box.accepted.connect(dialog.accept)
         dialog.exec()
+
+    def _check_for_updates_startup(self) -> None:
+        worker = UpdateCheckWorker()
+        worker.signals.update_available.connect(self._on_update_available)
+        QThreadPool.globalInstance().start(worker)
+
+    def _check_for_updates_manual(self) -> None:
+        self.statusBar().showMessage("Checking for updates...")
+        worker = UpdateCheckWorker()
+        worker.signals.update_available.connect(self._on_update_available)
+        worker.signals.up_to_date.connect(self._on_up_to_date)
+        worker.signals.error.connect(self._on_update_check_error)
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_update_available(self, version: str, download_url: str, release_url: str) -> None:
+        self.statusBar().showMessage("")
+        reply = QMessageBox.question(
+            self,
+            "Update Available",
+            f"AppMeUp! {version} is available.\n\n"
+            f"You have version {APP_VERSION}.\n\n"
+            "Do you want to download and install it?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self.statusBar().showMessage("Downloading update...")
+        worker = UpdateDownloadWorker(download_url)
+        worker.signals.finished.connect(self._on_update_downloaded)
+        worker.signals.error.connect(self._on_update_download_error)
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_up_to_date(self) -> None:
+        self.statusBar().showMessage("")
+        QMessageBox.information(self, "Update Check", f"You're running the latest version ({APP_VERSION}).")
+
+    def _on_update_check_error(self, error: str) -> None:
+        self.statusBar().showMessage("")
+        QMessageBox.warning(self, "Update Check", f"Could not check for updates:\n{error}")
+
+    def _on_update_downloaded(self) -> None:
+        self.statusBar().showMessage("")
+        reply = QMessageBox.question(
+            self,
+            "Update Installed",
+            "AppMeUp! has been updated.\n\nRestart now to apply the changes?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if reply == QMessageBox.Yes:
+            QApplication.quit()
+            subprocess.Popen([sys.argv[0]], start_new_session=True)
+
+    def _on_update_download_error(self, error: str) -> None:
+        self.statusBar().showMessage("")
+        QMessageBox.warning(self, "Update Error", f"Could not install update:\n{error}")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._confirm_discard():
