@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -60,21 +60,14 @@ def build_webapp_item_widget(config: WebAppConfig) -> QWidget:
     text_layout.setSpacing(2)
 
     title_label = QLabel(config.name or config.desktop_filename)
-    title_label.setStyleSheet("font-weight: 600;")
+    font = title_label.font()
+    font.setWeight(QFont.Weight.DemiBold)
+    title_label.setFont(font)
     title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
     text_layout.addWidget(title_label)
 
     detail_label = QLabel(config.url or config.desktop_path)
-    detail_color = detail_label.palette().color(QPalette.WindowText)
-    detail_color.setAlpha(180)
-    detail_label.setStyleSheet(
-        "color: rgba(%d, %d, %d, %d);" % (
-            detail_color.red(),
-            detail_color.green(),
-            detail_color.blue(),
-            detail_color.alpha(),
-        )
-    )
+    detail_label.setStyleSheet("color: palette(mid);")
     detail_label.setWordWrap(True)
     detail_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
     text_layout.addWidget(detail_label)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import signal
 import sys
 
@@ -15,8 +16,17 @@ from src.main_window import MainWindow
 logger = setup_logging(verbose="--verbose" in sys.argv)
 
 
+def _configure_qt_theme() -> None:
+    if os.environ.get("QT_STYLE_OVERRIDE") or os.environ.get("QT_QPA_PLATFORMTHEME"):
+        return
+
+    # Let Qt follow the desktop theme via the compatible GTK platform theme.
+    os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
+
+
 def main() -> int:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
+    _configure_qt_theme()
     QApplication.setApplicationName(APP_NAME)
     QApplication.setDesktopFileName(APP_ID)
     app = QApplication([])
