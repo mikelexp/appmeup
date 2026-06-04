@@ -9,7 +9,16 @@ Son dos pasos: GitHub Release (automático) y AUR (manual).
 Esto lo hace GitHub Actions automáticamente. Solo necesitás:
 
 ```bash
-# 1. Cambiá la versión en src/constants.py (ej: "1.2" → "1.3")
+# 1. Cambiá la versión con make/just (ej: 1.2.1 → 1.3.0)
+make set-version VERSION=1.3.0
+# o
+just set-version 1.3.0
+
+# Si solo querés verla
+make version
+# o
+just version
+
 # 2. Commiteá y etiquetá
 git commit -am "bump to v1.3"
 git tag v1.3
@@ -52,7 +61,7 @@ El script (`scripts/aur-update.sh`) hace todo solo:
 ## En resumen
 
 ```
-1. src/constants.py → cambiar versión
+1. `make set-version` / `just set-version` → cambia `src/constants.py` y `PKGBUILD`
 2. git commit + tag + push
 3. Esperar a que GitHub Actions termine el build
 4. make aur-update
