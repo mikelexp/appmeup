@@ -2,7 +2,7 @@
 # Contributor: Mikele <mikele@gmail.com>
 
 pkgname=appmeup-bin
-pkgver=1.2.1
+pkgver=1.2.2
 pkgrel=1
 pkgdesc="Create and edit Chromium web apps from .desktop files"
 arch=('x86_64')
