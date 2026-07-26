@@ -97,7 +97,11 @@ def build_basic_tab() -> tuple[QWidget, dict[str, QWidget]]:
     icon_preview_label = QLabel("No icon")
     icon_preview_label.setAlignment(Qt.AlignCenter)
     icon_preview_label.setFixedSize(ICON_PREVIEW_SIZE + 16, ICON_PREVIEW_SIZE + 16)
-    icon_preview_label.setStyleSheet("QLabel { border: 1px solid palette(mid); padding: 4px; }")
+    icon_preview_label.setObjectName("iconPreview")
+    icon_preview_label.setStyleSheet(
+        "QLabel#iconPreview { border: 1px solid palette(mid); padding: 4px; "
+        "background: palette(base); color: palette(text); }"
+    )
     widgets["icon_preview_label"] = icon_preview_label
     form.addRow("Preview", icon_preview_label)
 

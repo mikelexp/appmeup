@@ -37,6 +37,6 @@ make clean               # rm -rf .venv build dist
 - No test framework, no linter, no typechecker configured
 - CI only builds — no automated verification
 - Linux-only (Linux desktop app, XDG paths, Chromium browser integration)
-- Qt should follow the system theme. Do not force Breeze or another custom style; avoid hardcoded widget styles unless they are strictly necessary. The app may set `QT_QPA_PLATFORMTHEME=gtk3` at startup when no theme override is present so Qt inherits the desktop theme instead of falling back to `Fusion`.
+- Qt should follow the system theme. When the system KDE platform plugin is available, use it for Plasma integration without overriding the user's widget style; otherwise fall back to GTK3. Respect `QT_STYLE_OVERRIDE` and `QT_QPA_PLATFORMTHEME`, and avoid hardcoded widget styles unless they are strictly necessary.
 - Icon fetch uses GitHub releases API for update checks
 - `is_aur_install()` heuristic: binary in `/usr/bin` or `/usr/local/bin` → skips built-in updater

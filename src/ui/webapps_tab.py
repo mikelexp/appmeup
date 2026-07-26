@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -31,6 +32,16 @@ def build_webapps_tab() -> tuple[QWidget, QListWidget, QLabel]:
     webapps_list = QListWidget()
     webapps_list.setSelectionMode(QAbstractItemView.SingleSelection)
     webapps_list.setSpacing(4)
+    webapps_list.setFrameShape(QFrame.Shape.NoFrame)
+    webapps_list.setStyleSheet(
+        "QListWidget { background: transparent; border: none; outline: none; }"
+        "QListWidget::item { border: 1px solid palette(mid); border-radius: 6px; "
+        "margin: 3px 0; background: palette(base); }"
+        "QListWidget::item:selected { border: 2px solid palette(highlight); "
+        "background: palette(light); }"
+        "QListWidget::item:hover:!selected { border-color: palette(highlight); "
+        "background: palette(alternate-base); }"
+    )
     webapps_list.setContextMenuPolicy(Qt.CustomContextMenu)
     layout.addWidget(webapps_list)
 
@@ -67,7 +78,7 @@ def build_webapp_item_widget(config: WebAppConfig) -> QWidget:
     text_layout.addWidget(title_label)
 
     detail_label = QLabel(config.url or config.desktop_path)
-    detail_label.setStyleSheet("color: palette(mid);")
+    detail_label.setStyleSheet("color: palette(mid); background: transparent;")
     detail_label.setWordWrap(True)
     detail_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
     text_layout.addWidget(detail_label)
