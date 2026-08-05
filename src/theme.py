@@ -21,22 +21,29 @@ def configure_qt_theme() -> str:
     if os.environ.get("QT_STYLE_OVERRIDE") or os.environ.get("QT_QPA_PLATFORMTHEME"):
         return "user override"
 
+    bundled_plugin_path = Path(
+        str(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))
+    )
     breeze_plugin_path = next(
         (path for path in _SYSTEM_PLUGIN_PATHS if (path / "styles" / "breeze6.so").exists()),
         None,
     )
     if breeze_plugin_path is None:
-        os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
-        return "gtk3"
+        # Do not point Qt at a platform theme that the bundled application does
+        # not have. Qt can use its default theme without a platform theme plugin.
+        if (bundled_plugin_path / "platformthemes" / "libqgtk3.so").is_file():
+            os.environ["QT_QPA_PLATFORMTHEME"] = "gtk3"
+            return "gtk3"
+        return "default"
 
     plugin_paths = [str(breeze_plugin_path)]
     configured_plugin_path = os.environ.get("QT_PLUGIN_PATH")
     if configured_plugin_path:
         plugin_paths.insert(0, configured_plugin_path)
 
-    bundled_plugin_path = str(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))
-    if bundled_plugin_path not in plugin_paths:
-        plugin_paths.insert(0, bundled_plugin_path)
+    bundled_plugin_path_string = str(bundled_plugin_path)
+    if bundled_plugin_path_string not in plugin_paths:
+        plugin_paths.insert(0, bundled_plugin_path_string)
     os.environ["QT_PLUGIN_PATH"] = os.pathsep.join(plugin_paths)
     os.environ["QT_QPA_PLATFORMTHEME"] = "kde"
 

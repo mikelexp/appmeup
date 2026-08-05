@@ -2,13 +2,22 @@
 # Contributor: Mikele <mikele@gmail.com>
 
 pkgname=appmeup-bin
-pkgver=1.2.3
+pkgver=1.2.4
 pkgrel=1
 pkgdesc="Create and edit Chromium web apps from .desktop files"
 arch=('x86_64')
 url="https://github.com/mikelexp/appmeup"
 license=('GPL3')
-depends=('glibc')
+depends=(
+  'glibc'
+  'libxcb'
+  'libxkbcommon-x11'
+  'xcb-util-cursor'
+  'xcb-util-image'
+  'xcb-util-keysyms'
+  'xcb-util-renderutil'
+  'xcb-util-wm'
+)
 optdepends=(
   'google-chrome: Google Chrome browser'
   'chromium: Chromium browser'
