@@ -25,7 +25,7 @@ optdepends=(
   'vivaldi: Vivaldi browser'
 )
 source=("${url}/releases/download/v${pkgver}/appmeup-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('2f327fb7c3bdcba66fbdeaca114bd14dd6609ce0a32d392358bbf47edd1d0ddb')
+sha256sums=('117082085621d802d42beb1f4610681baa488ac2e68dc1a2eb0403fe69fba396')
 
 package() {
   cd "${srcdir}"
