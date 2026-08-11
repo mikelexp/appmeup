@@ -33,10 +33,25 @@ make clean               # rm -rf .venv build dist
 3. GitHub Actions (`.github/workflows/release.yml`) builds onefile binary and creates Release
 4. `make aur-update` (or `just aur-update`) pushes to AUR manually after Release is live
 
+Release notes:
+- A new binary release requires a new version tag; use `make set-version` rather than reusing an existing tag.
+- The GitHub workflow builds the release tarball on Ubuntu; validate the resulting binary against Arch runtime libraries before publishing AUR changes.
+- `make aur-update` validates the official tarball with `makepkg -s` and regenerates `.SRCINFO`. AUR publishing requires the configured SSH key; AUR maintenance can temporarily make both clone and push unavailable.
+
 ## Constraints
 - No test framework, no linter, no typechecker configured
 - CI only builds — no automated verification
 - Linux-only (Linux desktop app, XDG paths, Chromium browser integration)
-- Qt should follow the system theme. When the system KDE platform plugin is available, use it for Plasma integration without overriding the user's widget style; otherwise fall back to GTK3. Respect `QT_STYLE_OVERRIDE` and `QT_QPA_PLATFORMTHEME`, and avoid hardcoded widget styles unless they are strictly necessary.
+- Qt should follow the system theme. Configure the platform before creating `QApplication`; preserve user-set `QT_STYLE_OVERRIDE`, `QT_QPA_PLATFORMTHEME`, and `QT_PLUGIN_PATH` values. When the system KDE platform plugin is available, use it for Plasma integration without overriding the user's widget style. In XFCE, select GTK3 only when `platformthemes/libqgtk3.so` is actually available; otherwise use Qt's default style instead of forcing a missing plugin.
+- Keep the bundled PySide6/Nuitka plugin directory first in `QT_PLUGIN_PATH`. Do not prepend the full system Qt plugin tree, since incompatible system XCB, Wayland, or style plugins can break startup.
+- A message listing `xcb` under "Available platform plugins" only proves discovery, not initialization. For failures, run `QT_DEBUG_PLUGINS=1 appmeup --verbose` and inspect the bundled `libqxcb.so` with `ldd`/`lddtree`.
+- The Arch `PKGBUILD` must declare external X11/XCB runtime dependencies so `yay -S appmeup-bin` needs no manual dependency installation: `libxcb`, `libxkbcommon-x11`, `xcb-util-cursor`, `xcb-util-image`, `xcb-util-keysyms`, `xcb-util-renderutil`, and `xcb-util-wm`. Do not add the full `qt6-base` package when Qt is bundled by Nuitka.
 - Icon fetch uses GitHub releases API for update checks
 - `is_aur_install()` heuristic: binary in `/usr/bin` or `/usr/local/bin` → skips built-in updater
+
+## Qt verification
+```sh
+.venv/bin/python -m compileall -q appmeup.py src
+QT_QPA_PLATFORM=offscreen .venv/bin/python -c 'from PySide6.QtWidgets import QApplication; app=QApplication([]); print(app.style().objectName())'
+makepkg --printsrcinfo
+```
