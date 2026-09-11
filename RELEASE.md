@@ -35,7 +35,7 @@ publicado con el tarball listo para descargar.
 
 ---
 
-## 2. AUR (appmeup-bin)
+## 2. AUR (appmeup)
 
 Una vez que el GitHub Release está publicado, actualizás el paquete de AUR
 automáticamente con un solo comando:
@@ -48,7 +48,7 @@ just aur-update
 
 El script (`scripts/aur-update.sh`) hace todo solo:
 1. Lee la versión de `src/constants.py`
-2. Descarga el tarball del Release
+2. Descarga el tarball del código fuente de la tag
 3. Calcula el SHA256
 4. Clona el repo AUR desde cero
 5. Actualiza `PKGBUILD` (versión, checksum, resetea pkgrel)

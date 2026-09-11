@@ -34,18 +34,20 @@ make clean               # rm -rf .venv build dist
 4. `make aur-update` (or `just aur-update`) pushes to AUR manually after Release is live
 
 Release notes:
-- A new binary release requires a new version tag; use `make set-version` rather than reusing an existing tag.
-- The GitHub workflow builds the release tarball on Ubuntu; validate the resulting binary against Arch runtime libraries before publishing AUR changes.
-- `make aur-update` validates the official tarball with `makepkg -s` and regenerates `.SRCINFO`. AUR publishing requires the configured SSH key; AUR maintenance can temporarily make both clone and push unavailable.
+- A new release requires a new version tag; use `make set-version` rather than reusing an existing tag.
+- The GitHub workflow builds portable Nuitka binaries for non-distro installs.
+- The Arch AUR package is a source package using `python-pyside6`, so it inherits each user's system Qt/Plasma theme instead of bundling Qt.
+- `make aur-update` validates the source package with `makepkg -s` and regenerates `.SRCINFO`. AUR publishing requires the configured SSH key; AUR maintenance can temporarily make both clone and push unavailable.
 
 ## Constraints
 - No test framework, no linter, no typechecker configured
 - CI only builds — no automated verification
 - Linux-only (Linux desktop app, XDG paths, Chromium browser integration)
-- Qt should follow the system theme. Configure the platform before creating `QApplication`; preserve user-set `QT_STYLE_OVERRIDE`, `QT_QPA_PLATFORMTHEME`, and `QT_PLUGIN_PATH` values. When the system KDE platform plugin is available, use it for Plasma integration without overriding the user's widget style. In XFCE, select GTK3 only when `platformthemes/libqgtk3.so` is actually available; otherwise use Qt's default style instead of forcing a missing plugin.
-- Keep the bundled PySide6/Nuitka plugin directory first in `QT_PLUGIN_PATH`. Do not prepend the full system Qt plugin tree, since incompatible system XCB, Wayland, or style plugins can break startup.
+- Qt should follow the system theme. Configure the platform before creating `QApplication`; preserve user-set `QT_STYLE_OVERRIDE`, `QT_QPA_PLATFORMTHEME`, and `QT_PLUGIN_PATH` values. Never set `QT_STYLE_OVERRIDE` or inject plugins from another Qt installation. On Plasma, request `QT_QPA_PLATFORMTHEME=kde` only when the running Qt provides the KDE platform plugin; otherwise use Qt's safe default.
+- The Arch package must use the system `python-pyside6` runtime. Do not use the Nuitka binary for the Arch package, because its bundled Qt cannot safely load arbitrary user/system Qt styles.
+- `just run` and `make run` prefer `/usr/bin/python` when system PySide6 and pyxdg are available, so local runs use the system Qt/Plasma theme; the virtualenv remains for portable Nuitka builds.
 - A message listing `xcb` under "Available platform plugins" only proves discovery, not initialization. For failures, run `QT_DEBUG_PLUGINS=1 appmeup --verbose` and inspect the bundled `libqxcb.so` with `ldd`/`lddtree`.
-- The Arch `PKGBUILD` must declare external X11/XCB runtime dependencies so `yay -S appmeup-bin` needs no manual dependency installation: `libxcb`, `libxkbcommon-x11`, `xcb-util-cursor`, `xcb-util-image`, `xcb-util-keysyms`, `xcb-util-renderutil`, and `xcb-util-wm`. Do not add the full `qt6-base` package when Qt is bundled by Nuitka.
+- The Arch `PKGBUILD` must depend on `python`, `python-pyside6`, and `python-pyxdg`; `python-pyside6` supplies the matching Qt runtime and desktop plugins.
 - Icon fetch uses GitHub releases API for update checks
 - `is_aur_install()` heuristic: binary in `/usr/bin` or `/usr/local/bin` → skips built-in updater
 

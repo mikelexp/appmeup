@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import signal
 import sys
 
@@ -24,6 +25,13 @@ def main() -> int:
     QApplication.setDesktopFileName(APP_ID)
     app = QApplication([])
     ensure_placeholder_text_contrast(app)
+    logger.debug(
+        "Qt runtime: platform_theme=%r style_override=%r plugin_path=%r style=%s",
+        os.environ.get("QT_QPA_PLATFORMTHEME"),
+        os.environ.get("QT_STYLE_OVERRIDE"),
+        os.environ.get("QT_PLUGIN_PATH"),
+        app.style().objectName(),
+    )
     icon = app_icon()
     if not icon.isNull():
         app.setWindowIcon(icon)

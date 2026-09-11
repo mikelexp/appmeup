@@ -4,16 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 APP_VERSION="$(python3 -c "import sys; sys.path.insert(0, '${ROOT_DIR}'); from src.constants import APP_VERSION; print(APP_VERSION)")"
-REPO_NAME="appmeup-bin"
+REPO_NAME="appmeup"
 AUR_SSH="ssh://aur@aur.archlinux.org/${REPO_NAME}.git"
 WORK_DIR="$(mktemp -d /tmp/aur-update-XXXXX)"
 
 echo "=== Updating AUR package ${REPO_NAME} to version ${APP_VERSION} ==="
 
 cd "${ROOT_DIR}"
-gh release download "v${APP_VERSION}" --repo mikelexp/appmeup --pattern '*.tar.gz' --clobber
-
-HASH="$(sha256sum appmeup-${APP_VERSION}-linux-x86_64.tar.gz | cut -d' ' -f1)"
+SOURCE_ARCHIVE="appmeup-${APP_VERSION}.tar.gz"
+curl --fail --location --output "${SOURCE_ARCHIVE}" \
+    "https://github.com/mikelexp/appmeup/archive/refs/tags/v${APP_VERSION}.tar.gz"
+HASH="$(sha256sum "${SOURCE_ARCHIVE}" | cut -d' ' -f1)"
 echo "SHA256: ${HASH}"
 
 echo "Cloning AUR repo..."
@@ -34,6 +35,6 @@ git commit -m "bump to v${APP_VERSION}"
 git push origin master
 
 rm -rf "${WORK_DIR}"
-rm -f "${ROOT_DIR}/appmeup-${APP_VERSION}-linux-x86_64.tar.gz"
+rm -f "${ROOT_DIR}/${SOURCE_ARCHIVE}"
 
 echo "=== Done ==="

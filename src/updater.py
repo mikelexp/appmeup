@@ -20,7 +20,7 @@ logger = setup_logging()
 GITHUB_REPO = "mikelexp/appmeup"
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 BINARY_NAME = "appmeup"
-PACMAN_PACKAGE = "appmeup-bin"
+PACMAN_PACKAGE = "appmeup"
 
 
 def is_aur_install() -> bool:

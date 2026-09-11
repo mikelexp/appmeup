@@ -814,8 +814,8 @@ class MainWindow(QMainWindow):
                 "Update Check",
                 f"This installation of {APP_NAME} is managed by AUR.\n\n"
                 "Updates are handled by your package manager:\n"
-                "  yay -S appmeup-bin\n"
-                "  paru -S appmeup-bin",
+                "  yay -S appmeup\n"
+                "  paru -S appmeup",
             )
             return
         self.statusBar().showMessage("Checking for updates...")

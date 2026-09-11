@@ -11,7 +11,7 @@ set-version VERSION:
     @python3 -c 'from pathlib import Path; import re, sys; version = sys.argv[1]; path = Path("src/constants.py"); text = path.read_text(); text, count = re.subn(r"^APP_VERSION = \".*\"$", f"APP_VERSION = \"{version}\"", text, flags=re.M); path.write_text(text) if count else (_ for _ in ()).throw(SystemExit("src/constants.py pattern not found")); path = Path("PKGBUILD"); text = path.read_text(); text, count = re.subn(r"^pkgver=.*$", f"pkgver={version}", text, flags=re.M); path.write_text(text) if count else (_ for _ in ()).throw(SystemExit("PKGBUILD pkgver pattern not found")); text = path.read_text(); text, count = re.subn(r"^pkgrel=.*$", "pkgrel=1", text, flags=re.M); path.write_text(text) if count else (_ for _ in ()).throw(SystemExit("PKGBUILD pkgrel pattern not found")); print(f"Set version to {version} in src/constants.py and PKGBUILD")' "{{VERSION}}"
 
 run: _ensure-python
-    {{python}} appmeup.py
+    bash {{scripts}}/run.sh
 
 install-deps:
     bash {{scripts}}/install-build-deps.sh

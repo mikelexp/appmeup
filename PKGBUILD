@@ -1,22 +1,18 @@
 # Maintainer: Mikele <mikele@gmail.com>
-# Contributor: Mikele <mikele@gmail.com>
 
-pkgname=appmeup-bin
+pkgname=appmeup
 pkgver=1.2.5
 pkgrel=1
 pkgdesc="Create and edit Chromium web apps from .desktop files"
 arch=('x86_64')
 url="https://github.com/mikelexp/appmeup"
 license=('GPL3')
+conflicts=('appmeup-bin')
+replaces=('appmeup-bin')
 depends=(
-  'glibc'
-  'libxcb'
-  'libxkbcommon-x11'
-  'xcb-util-cursor'
-  'xcb-util-image'
-  'xcb-util-keysyms'
-  'xcb-util-renderutil'
-  'xcb-util-wm'
+  'python'
+  'python-pyside6'
+  'python-pyxdg'
 )
 optdepends=(
   'google-chrome: Google Chrome browser'
@@ -24,15 +20,31 @@ optdepends=(
   'brave-bin: Brave browser'
   'vivaldi: Vivaldi browser'
 )
-source=("${url}/releases/download/v${pkgver}/appmeup-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('117082085621d802d42beb1f4610681baa488ac2e68dc1a2eb0403fe69fba396')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('1e55738c104726b1f8cdb0f0a08ae5383b925033049ca02f1784cd025d24eb0c')
 
 package() {
-  cd "${srcdir}"
+  cd "${srcdir}/${pkgname}-${pkgver}"
 
-  install -Dm755 appmeup "${pkgdir}/usr/bin/appmeup"
+  install -d "${pkgdir}/usr/share/${pkgname}"
+  install -Dm644 appmeup.py "${pkgdir}/usr/share/${pkgname}/appmeup.py"
+  cp -r src "${pkgdir}/usr/share/${pkgname}/"
+  install -Dm755 /dev/stdin "${pkgdir}/usr/bin/appmeup" <<'EOF'
+#!/bin/sh
+exec /usr/bin/python /usr/share/appmeup/appmeup.py "$@"
+EOF
   install -Dm644 icon.png "${pkgdir}/usr/share/icons/hicolor/512x512/apps/mikelexp.appmeup.png"
-  install -Dm644 mikelexp.appmeup.desktop "${pkgdir}/usr/share/applications/mikelexp.appmeup.desktop"
-  sed -i 's|^Exec=.*|Exec=/usr/bin/appmeup|' "${pkgdir}/usr/share/applications/mikelexp.appmeup.desktop"
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/mikelexp.appmeup.desktop" <<'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AppMeUp!
+Comment=Create and edit Chromium web apps from .desktop files
+Exec=/usr/bin/appmeup
+Icon=mikelexp.appmeup
+Categories=Network;WebBrowser;Utility;
+Terminal=false
+StartupNotify=true
+EOF
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

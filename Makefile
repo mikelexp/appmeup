@@ -19,7 +19,7 @@ help:
 	@echo "  aur-update       Build and push AUR package for current version"
 
 run: $(PYTHON)
-	$(PYTHON) appmeup.py
+	bash $(SCRIPTS)/run.sh
 
 install-deps:
 	@bash $(SCRIPTS)/install-build-deps.sh

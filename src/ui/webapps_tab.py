@@ -38,7 +38,7 @@ def build_webapps_tab() -> tuple[QWidget, QListWidget, QLabel]:
         "QListWidget::item { border: 1px solid palette(mid); border-radius: 6px; "
         "margin: 3px 0; background: palette(base); }"
         "QListWidget::item:selected { border: 2px solid palette(highlight); "
-        "background: palette(light); }"
+        "background: palette(highlight); }"
         "QListWidget::item:hover:!selected { border-color: palette(highlight); "
         "background: palette(alternate-base); }"
     )
@@ -78,7 +78,7 @@ def build_webapp_item_widget(config: WebAppConfig) -> QWidget:
     text_layout.addWidget(title_label)
 
     detail_label = QLabel(config.url or config.desktop_path)
-    detail_label.setStyleSheet("color: palette(mid); background: transparent;")
+    detail_label.setStyleSheet("color: palette(placeholder-text); background: transparent;")
     detail_label.setWordWrap(True)
     detail_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
     text_layout.addWidget(detail_label)
