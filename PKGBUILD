@@ -21,7 +21,7 @@ optdepends=(
   'vivaldi: Vivaldi browser'
 )
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('1e55738c104726b1f8cdb0f0a08ae5383b925033049ca02f1784cd025d24eb0c')
+sha256sums=('c91fd88b6eee5a95a56bee44fbedadebdf68944413bd34d95b65401d1cc7185e')
 
 package() {
   cd "${srcdir}/${pkgname}-${pkgver}"
