@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import signal
 import sys
+
+# Accelerated Nuitka builds keep the application package beside the binary.
+sys.path.insert(0, str(Path(sys.argv[0]).resolve().parent))
 
 from src.icons import app_icon
 from src.logger import setup_logging
@@ -18,6 +22,9 @@ def main() -> int:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     app, theme_report = create_application(sys.argv)
     ensure_placeholder_text_contrast(app)
+    if "--theme-report" in sys.argv:
+        print(theme_report)
+        return 0
     logger.debug(
         "Qt runtime: platform_theme=%r style_override=%r plugin_path=%r "
         "platform=%s style=%s source=%s PySide6=%s Qt=%s",

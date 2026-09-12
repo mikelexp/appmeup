@@ -16,6 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "${SCRIPT_DIR}/appmeup" && -f "${SCRIPT_DIR}/icon.png" ]]; then
     MODE="tarball"
     BIN="${SCRIPT_DIR}/appmeup"
+    SRC="${SCRIPT_DIR}/src"
     ICON="${SCRIPT_DIR}/icon.png"
 elif [[ -d "${SCRIPT_DIR}/../dist" ]]; then
     ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -27,9 +28,11 @@ elif [[ -d "${SCRIPT_DIR}/../dist" ]]; then
     if [[ -d "${STANDALONE_DIR}" && -f "${STANDALONE_BIN}" ]]; then
         MODE="standalone"
         BIN="${STANDALONE_DIR}"
+        SRC=""
     elif [[ -f "${ONEFILE_BIN}" ]]; then
         MODE="onefile"
         BIN="${ONEFILE_BIN}"
+        SRC="${DIST_DIR}/src"
     else
         echo "Error: no build found in ${DIST_DIR}." >&2
         echo "Run scripts/build-standalone.sh or scripts/build-onefile.sh first." >&2
@@ -49,6 +52,12 @@ if [[ "${MODE}" == "standalone" ]]; then
     rm -rf "${INSTALL_LIB}"
     cp -r "${BIN}" "${INSTALL_LIB}"
     chmod +x "${INSTALL_LIB}/appmeup.bin"
+    ln -sf "${INSTALL_LIB}/appmeup.bin" "${INSTALL_BIN}/${APP_BIN_NAME}"
+elif [[ -d "${SRC}" ]]; then
+    rm -rf "${INSTALL_LIB}"
+    mkdir -p "${INSTALL_LIB}"
+    install -m 755 "${BIN}" "${INSTALL_LIB}/appmeup.bin"
+    cp -r "${SRC}" "${INSTALL_LIB}/src"
     ln -sf "${INSTALL_LIB}/appmeup.bin" "${INSTALL_BIN}/${APP_BIN_NAME}"
 else
     install -m 755 "${BIN}" "${INSTALL_BIN}/${APP_BIN_NAME}"

@@ -24,28 +24,24 @@ def build_command(onefile: bool) -> list[str]:
         "-m",
         "nuitka",
         "--assume-yes-for-downloads",
-        "--standalone",
-        "--enable-plugin=pyside6",
-        "--include-qt-plugins=platforms,platformthemes,styles,iconengines,imageformats,wayland-shell-integration,wayland-decoration-client,wayland-graphics-integration-client,xcbglintegrations",
+        "--mode=accelerated",
+        "--output-filename=appmeup.bin",
         "--output-dir=" + str(DIST_DIR),
         "--remove-output",
         "--show-progress",
         "--show-scons",
-        "--follow-imports",
-        "--python-flag=no_site",
+        "--python-flag=site",
         "--warn-unusual-code",
         "--company-name=Mikele",
         "--product-name=App Me Up",
         "--file-description=Create and edit Chromium web apps from .desktop files",
         f"--file-version={APP_VERSION}.0",
         f"--product-version={APP_VERSION}.0",
-        "--nofollow-import-to=tkinter,test,unittest,pydoc",
+        "--nofollow-import-to=tkinter,test,unittest,pydoc,PySide6,shiboken6,src",
         f"--include-data-files={ICON_FILE}=icon.png",
+        f"--include-data-dir={PROJECT_ROOT / 'src'}=src",
         str(MAIN_SCRIPT),
     ]
-
-    if onefile:
-        command.append("--onefile")
 
     return command
 
@@ -73,7 +69,7 @@ def clean() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build App Me Up with Nuitka.")
-    parser.add_argument("--onefile", action="store_true", help="Build a onefile binary instead of standalone.")
+    parser.add_argument("--onefile", action="store_true", help="Legacy compatibility option; builds accelerated mode.")
     parser.add_argument("--clean", action="store_true", help="Remove build artifacts before building.")
     parser.add_argument("--clean-only", action="store_true", help="Only remove build artifacts.")
     args = parser.parse_args()
@@ -89,6 +85,14 @@ def main() -> int:
     env = os.environ.copy()
     env["XDG_CACHE_HOME"] = str(BUILD_DIR / ".cache")
     completed = subprocess.run(command, cwd=PROJECT_ROOT, env=env)
+    if completed.returncode == 0:
+        shutil.copytree(
+            PROJECT_ROOT / "src",
+            DIST_DIR / "src",
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+        shutil.copy2(ICON_FILE, DIST_DIR / "icon.png")
     return completed.returncode
 
 

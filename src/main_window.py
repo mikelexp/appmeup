@@ -163,18 +163,18 @@ class MainWindow(QMainWindow):
                     elif sub.text() == "Save WebApp":
                         sub.triggered.connect(self.save_desktop)
 
-        self._basic_widgets["name_input"].textEdited.connect(self._on_name_changed)
-        self._basic_widgets["url_input"].textEdited.connect(self.mark_dirty)
+        self._basic_widgets["name_input"].textEdited[str].connect(self._on_name_changed)
+        self._basic_widgets["url_input"].textEdited[str].connect(self.mark_dirty)
         self._basic_widgets["url_input"].editingFinished.connect(self._on_url_edit_finished)
-        self._basic_widgets["comment_input"].textEdited.connect(self.mark_dirty)
-        self._basic_widgets["categories_select"].currentIndexChanged.connect(self._on_category_selected)
-        self._basic_widgets["categories_input"].textEdited.connect(self.mark_dirty)
-        self._basic_widgets["filename_input"].textEdited.connect(self._on_filename_changed)
+        self._basic_widgets["comment_input"].textEdited[str].connect(self.mark_dirty)
+        self._basic_widgets["categories_select"].currentIndexChanged[int].connect(self._on_category_selected)
+        self._basic_widgets["categories_input"].textEdited[str].connect(self.mark_dirty)
+        self._basic_widgets["filename_input"].textEdited[str].connect(self._on_filename_changed)
         self._basic_widgets["open_folder_button"].clicked.connect(self.open_desktop_folder)
-        self._basic_widgets["chromium_input"].textEdited.connect(self.mark_dirty)
-        self._basic_widgets["chromium_input"].textEdited.connect(self._update_browser_ui)
+        self._basic_widgets["chromium_input"].textEdited[str].connect(self.mark_dirty)
+        self._basic_widgets["chromium_input"].textEdited[str].connect(self._update_browser_ui)
         self._basic_widgets["chromium_detect_button"].clicked.connect(self.detect_chromium_path)
-        self._basic_widgets["icon_input"].textEdited.connect(self.mark_dirty)
+        self._basic_widgets["icon_input"].textEdited[str].connect(self.mark_dirty)
         self._basic_widgets["icon_input"].textChanged.connect(self.update_icon_preview)
         self._basic_widgets["browse_icon_button"].clicked.connect(self.choose_icon_file)
         self._basic_widgets["fetch_icon_button"].clicked.connect(self.fetch_icon)
@@ -183,11 +183,11 @@ class MainWindow(QMainWindow):
         self._browser_widgets["chromium_search_input"].textChanged.connect(self._filter_chromium)
         for w in self._browser_widgets.values():
             if isinstance(w, QLineEdit):
-                w.textEdited.connect(self.mark_dirty)
+                w.textEdited[str].connect(self.mark_dirty)
             elif isinstance(w, QCheckBox):
                 w.toggled.connect(self.mark_dirty)
             elif isinstance(w, dict) and "line_edit" in w:
-                w["line_edit"].textEdited.connect(self.mark_dirty)
+                w["line_edit"].textEdited[str].connect(self.mark_dirty)
         self._browser_widgets["extra_args_input"].textChanged.connect(self.mark_dirty)
 
         self.webapps_list.itemDoubleClicked.connect(self.open_webapp_list_item)

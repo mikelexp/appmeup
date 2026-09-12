@@ -26,22 +26,23 @@ A desktop app for creating and editing Chromium-based web apps in Linux.
 
 ## Requirements
 
-- Python 3.13
+- Python 3
+- PySide6 and pyxdg from the distribution
 - GNU Make
 
 ## Quick Start
 
 ```bash
-make install-deps   # create venv and install dependencies
+make install-deps   # install build tools; Qt dependencies come from the system
 make run            # run the app
 ```
 
 ## Build
 
 ```bash
-make build-standalone   # standalone binary
+make build-standalone   # accelerated binary using system Qt
 # or
-make build-onefile      # onefile binary
+make build-onefile      # same accelerated build
 ```
 
 Install a built binary locally:

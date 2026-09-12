@@ -8,7 +8,7 @@ help:
 	@echo "  run              Run the app"
 	@echo "  install-deps     Create venv and install dependencies"
 	@echo "  build-standalone Build standalone binary"
-	@echo "  build-onefile    Build onefile binary"
+	@echo "  build-onefile    Build accelerated binary using system Qt"
 	@echo "  version          Print the current app version"
 	@echo "  set-version      Set APP_VERSION in src/constants.py (use VERSION=...)"
 	@echo "  clean            Remove venv, build, and dist"
