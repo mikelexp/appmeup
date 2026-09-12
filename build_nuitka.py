@@ -26,7 +26,7 @@ def build_command(onefile: bool) -> list[str]:
         "--assume-yes-for-downloads",
         "--standalone",
         "--enable-plugin=pyside6",
-        "--include-qt-plugins=platforms,platformthemes,iconengines,imageformats,wayland-shell-integration,wayland-decoration-client,wayland-graphics-integration-client,xcbglintegrations",
+        "--include-qt-plugins=platforms,platformthemes,styles,iconengines,imageformats,wayland-shell-integration,wayland-decoration-client,wayland-graphics-integration-client,xcbglintegrations",
         "--output-dir=" + str(DIST_DIR),
         "--remove-output",
         "--show-progress",

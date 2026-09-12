@@ -6,31 +6,29 @@ import os
 import signal
 import sys
 
-from PySide6.QtWidgets import QApplication
-
-from src.constants import APP_ID, APP_NAME
 from src.icons import app_icon
 from src.logger import setup_logging
 from src.main_window import MainWindow
-from src.theme import configure_qt_theme, ensure_placeholder_text_contrast
+from src.theme import create_application, ensure_placeholder_text_contrast
 
 logger = setup_logging(verbose="--verbose" in sys.argv)
 
 
 def main() -> int:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    theme_mode = configure_qt_theme()
-    logger.debug("Qt theme integration: %s", theme_mode)
-    QApplication.setApplicationName(APP_NAME)
-    QApplication.setDesktopFileName(APP_ID)
-    app = QApplication([])
+    app, theme_report = create_application(sys.argv)
     ensure_placeholder_text_contrast(app)
     logger.debug(
-        "Qt runtime: platform_theme=%r style_override=%r plugin_path=%r style=%s",
+        "Qt runtime: platform_theme=%r style_override=%r plugin_path=%r "
+        "platform=%s style=%s source=%s PySide6=%s Qt=%s",
         os.environ.get("QT_QPA_PLATFORMTHEME"),
         os.environ.get("QT_STYLE_OVERRIDE"),
-        os.environ.get("QT_PLUGIN_PATH"),
-        app.style().objectName(),
+        theme_report.plugin_path,
+        theme_report.platform,
+        theme_report.style,
+        theme_report.style_source,
+        theme_report.pyside_version,
+        theme_report.qt_version,
     )
     icon = app_icon()
     if not icon.isNull():

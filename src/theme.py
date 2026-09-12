@@ -1,29 +1,86 @@
 from __future__ import annotations
 
 import os
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QLibraryInfo
+from PySide6.QtCore import QLibraryInfo, qVersion
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QStyleFactory
+
+from src.constants import APP_ID, APP_NAME
+
+
+@dataclass(frozen=True)
+class ThemeReport:
+    style: str
+    pyside_version: str
+    qt_version: str
+    plugin_path: str
+    style_source: str
+    platform: str
+
+
+def configure_qt_platform() -> str:
+    """Prepare desktop integration without changing user-selected variables."""
+    if "QT_QPA_PLATFORMTHEME" not in os.environ and _is_plasma_session():
+        plugin_path = Path(str(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)))
+        if _has_platform_theme_plugin(plugin_path):
+            os.environ["QT_QPA_PLATFORMTHEME"] = "kde"
+            return "kde platform theme"
+
+    if "QT_STYLE_OVERRIDE" in os.environ or "QT_QPA_PLATFORMTHEME" in os.environ:
+        return "user override"
+    return "Qt default"
 
 
 def configure_qt_theme() -> str:
-    """Use the desktop's Qt theme without loading plugins from another Qt."""
-    style_overridden = "QT_STYLE_OVERRIDE" in os.environ
-    platform_overridden = "QT_QPA_PLATFORMTHEME" in os.environ
-    bundled_plugin_path = Path(str(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)))
+    """Compatibility name for callers using the previous bootstrap API."""
+    return configure_qt_platform()
 
-    if not platform_overridden and _is_plasma_session():
-        # A distro PySide6 uses the distro Qt plugin directory. A wheel does
-        # not, so do not inject a plugin directory from a different Qt build.
-        if _has_platform_theme_plugin(bundled_plugin_path):
-            os.environ["QT_QPA_PLATFORMTHEME"] = "kde"
-            return "kde (system Qt plugins)"
 
-    if style_overridden or platform_overridden:
-        return "user override"
-    return "default (Qt theme integration unavailable)"
+def inspect_effective_theme(app: QApplication) -> ThemeReport:
+    """Inspect Qt's actual style and use a safe style only without integration."""
+    style_source = "Qt"
+    platform = app.platformName().lower()
+    user_selected_platform = "QT_QPA_PLATFORMTHEME" in os.environ
+    user_selected_style = "QT_STYLE_OVERRIDE" in os.environ
+    if (platform in {"offscreen", "minimal", "minimalegl", "vnc"}
+            and not user_selected_platform and not user_selected_style):
+        breeze = QStyleFactory.create("Breeze")
+        if breeze is not None:
+            app.setStyle(breeze)
+            style_source = "Breeze fallback"
+        else:
+            fusion = QStyleFactory.create("Fusion")
+            if fusion is not None:
+                app.setStyle(fusion)
+                style_source = "Fusion fallback"
+
+    return ThemeReport(
+        style=app.style().objectName(),
+        pyside_version=_pyside_version(),
+        qt_version=qVersion(),
+        plugin_path=str(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)),
+        style_source=style_source,
+        platform=platform,
+    )
+
+
+def create_application(argv: list[str] | None = None) -> tuple[QApplication, ThemeReport]:
+    """Create QApplication only after Qt platform integration is configured."""
+    configure_qt_platform()
+    QApplication.setApplicationName(APP_NAME)
+    QApplication.setDesktopFileName(APP_ID)
+    app = QApplication(sys.argv if argv is None else argv)
+    return app, inspect_effective_theme(app)
+
+
+def _pyside_version() -> str:
+    from PySide6 import __version__
+
+    return __version__
 
 
 def _is_plasma_session() -> bool:
@@ -32,7 +89,12 @@ def _is_plasma_session() -> bool:
 
 
 def _has_platform_theme_plugin(plugin_path: Path) -> bool:
-    return (plugin_path / "platformthemes" / "KDEPlasmaPlatformTheme6.so").is_file()
+    theme_dir = plugin_path / "platformthemes"
+    try:
+        return any(path.is_file() and "KDEPlasmaPlatformTheme" in path.name
+                   for path in theme_dir.iterdir())
+    except OSError:
+        return False
 
 
 def is_dark_theme() -> bool:
